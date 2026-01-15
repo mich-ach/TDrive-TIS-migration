@@ -20,14 +20,16 @@ Configuration:
     - AUTO_OPEN_REPORT: Whether to open reports automatically
     - GENERATE_VALIDATION_REPORT: Whether to generate path deviation report
 """
+import datetime
+import json
+import logging
 import os
-import subprocess
 import platform
+import subprocess
 import sys
 from pathlib import Path
-import json
-import datetime
 from typing import Optional, NoReturn
+
 from directory_handler import DirectoryHandler
 from tis_artifact_extractor import TISAPIService, main as extract_artifacts
 from excel_handler import ExcelHandler
@@ -42,12 +44,21 @@ from config import (
     AUTO_OPEN_REPORT,
     GENERATE_VALIDATION_REPORT,
     OPEN_ARTIFACT_VIEWER,
+    LOG_LEVEL,
 )
+
+# Setup logging
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 
 def exit_with_error(message: str) -> NoReturn:
     """Exit the program with an error message."""
-    print(f"\nError: {message}")
+    logger.error(message)
     sys.exit(1)
 
 
@@ -61,9 +72,9 @@ def open_excel_file(file_path: Path) -> None:
             os.startfile(file_path_str)
         else:                                   # Linux variants
             subprocess.run(['xdg-open', file_path_str])
-        print(f"\nOpened Excel file: {file_path}")
+        logger.info(f"Opened Excel file: {file_path}")
     except Exception as e:
-        print(f"\nWarning: Failed to open Excel file: {e}")
+        logger.warning(f"Failed to open Excel file: {e}")
 
 
 def launch_artifact_viewer(json_file: Path) -> None:
@@ -72,7 +83,7 @@ def launch_artifact_viewer(json_file: Path) -> None:
         from artifact_viewer_gui import ArtifactViewerGUI
         import tkinter as tk
 
-        print("\nLaunching Artifact Viewer GUI...")
+        logger.info("Launching Artifact Viewer GUI...")
         root = tk.Tk()
         app = ArtifactViewerGUI(root)
 
@@ -81,10 +92,10 @@ def launch_artifact_viewer(json_file: Path) -> None:
 
         root.mainloop()
     except ImportError as e:
-        print(f"\nWarning: Could not import artifact viewer: {e}")
-        print("Make sure tkinter is installed.")
+        logger.warning(f"Could not import artifact viewer: {e}")
+        logger.info("Make sure tkinter is installed.")
     except Exception as e:
-        print(f"\nWarning: Failed to launch artifact viewer: {e}")
+        logger.warning(f"Failed to launch artifact viewer: {e}")
 
 
 def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[str]:
@@ -111,17 +122,17 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
             PATH_VALID_SUBFOLDERS_HIL,
         )
     except ImportError as e:
-        print(f"Warning: Could not import validation module: {e}")
+        logger.warning(f"Could not import validation module: {e}")
         return None
 
-    print("\nStep 3: Generating Validation Report (Path & Naming Deviations)")
-    print("       Analyzing artifact paths and names for convention compliance...")
+    logger.info("Step 3: Generating Validation Report (Path & Naming Deviations)")
+    logger.info("       Analyzing artifact paths and names for convention compliance...")
+
+    import re
 
     # Build validation report from extracted data
     report = ValidationReport()
     report.timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    import re
 
     # Compile naming convention patterns
     compiled_patterns = {}
@@ -134,19 +145,18 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
                     'example': pattern_config.get('example', '')
                 }
             except re.error as e:
-                print(f"Warning: Invalid regex for pattern '{pattern_name}': {e}")
+                logger.warning(f"Invalid regex for pattern '{pattern_name}': {e}")
 
     def validate_naming_convention(artifact_name: str) -> tuple:
         """Validate artifact name against configured patterns."""
         if not NAMING_CONVENTION_ENABLED or not compiled_patterns:
-            return (True, None, None, None)  # Validation disabled
+            return (True, None, None, None)
 
         for pattern_name, pattern_data in compiled_patterns.items():
             match = pattern_data['regex'].match(artifact_name)
             if match:
                 return (True, pattern_name, match.groupdict(), None)
 
-        # No pattern matched
         return (False, None, None, "Name does not match any known pattern")
 
     def get_model_subfolders_for_component(component_name: str) -> list:
@@ -154,18 +164,15 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
         if not component_name:
             return []
 
-        # Try exact match first
         if component_name in PATH_MODEL_SUBFOLDERS:
             return PATH_MODEL_SUBFOLDERS[component_name]
 
-        # Try prefix match (e.g., "MDL_HiL_PCIe" matches "MDL_HiL")
         for pattern, subfolders in PATH_MODEL_SUBFOLDERS.items():
             if pattern.startswith('_comment'):
                 continue
             if component_name.startswith(pattern):
                 return subfolders
 
-        # Fallback to HIL defaults if component contains HiL indicators
         if 'MDL' in component_name and 'SiL' not in component_name:
             return PATH_VALID_SUBFOLDERS_HIL
 
@@ -176,11 +183,9 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
         if not component_name:
             return ""
 
-        # Try exact match first
         if component_name in PATH_EXPECTED_STRUCTURE:
             return PATH_EXPECTED_STRUCTURE[component_name]
 
-        # Try prefix match
         for pattern, structure in PATH_EXPECTED_STRUCTURE.items():
             if pattern.startswith('_comment'):
                 continue
@@ -216,16 +221,13 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
         model_index = path_parts.index('Model')
         remaining = path_parts[model_index + 1:]
 
-        # Check for HiL or SiL path
         is_hil_path = 'HiL' in remaining
         is_sil_path = 'SiL' in remaining
 
-        # Get expected structure and model subfolders for this component
         expected_structure = get_expected_structure_for_component(component_name) if component_name else ""
         model_subfolders = get_model_subfolders_for_component(component_name) if component_name else []
 
         if not is_hil_path and not is_sil_path:
-            # Check if CSP/SWB directly under Model (common mistake)
             if remaining and any(sf in remaining[0] for sf in PATH_VALID_SUBFOLDERS_HIL):
                 return (
                     DeviationType.CSP_SWB_UNDER_MODEL,
@@ -238,7 +240,6 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
                 expected_structure or f"{project}/{sw_line}/Model/HiL|SiL/[subfolder]/..."
             )
 
-        # Validate HiL path
         if is_hil_path:
             hil_index = remaining.index('HiL')
             after_hil = remaining[hil_index + 1:]
@@ -250,7 +251,6 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
                     expected_structure or f"{project}/{sw_line}/Model/HiL/[CSP|SWB]/..."
                 )
 
-            # Check if first folder after HiL is valid
             first_after_hil = after_hil[0]
             check_subfolders = model_subfolders if model_subfolders else PATH_VALID_SUBFOLDERS_HIL
             is_valid_subfolder = any(
@@ -264,7 +264,6 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
                     expected_structure or f"{project}/{sw_line}/Model/HiL/[{'/'.join(check_subfolders)}]/..."
                 )
 
-        # Validate SiL path
         if is_sil_path:
             sil_index = remaining.index('SiL')
             after_sil = remaining[sil_index + 1:]
@@ -276,7 +275,6 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
                     expected_structure or f"{project}/{sw_line}/Model/SiL/[subfolder]/..."
                 )
 
-            # Check if first folder after SiL is valid (if model_subfolders configured for this component)
             if model_subfolders:
                 first_after_sil = after_sil[0]
                 is_valid_subfolder = any(
@@ -306,15 +304,11 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
 
             artifact_name = latest.get('name', '')
             path = latest.get('upload_path', '')
-            component_type = latest.get('component_type', '')  # e.g., "vVeh_LCO", "MDL_SiL"
+            component_type = latest.get('component_type', '')
 
-            # Validate naming convention
             name_valid, matched_pattern, matched_groups, name_error = validate_naming_convention(artifact_name)
-
-            # Validate path convention (using component_type for lookup)
             path_deviation, path_details, path_hint = validate_path_convention(path, artifact_name, component_type)
 
-            # Determine overall deviation
             deviation_type = DeviationType.VALID
             details = ""
             hint = ""
@@ -328,7 +322,7 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
                 details = path_details
                 hint = path_hint
 
-            # Build artifact dict
+            from config import TIS_LINK_TEMPLATE
             artifact_dict = {
                 'component_id': latest.get('artifact_rid', ''),
                 'component_name': artifact_name,
@@ -349,18 +343,15 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
                 report.deviations_found += 1
                 report.deviations.append(artifact_dict)
 
-                # Group by type
                 if deviation_type.value not in report.deviations_by_type:
                     report.deviations_by_type[deviation_type.value] = []
                 report.deviations_by_type[deviation_type.value].append(artifact_dict)
 
-                # Group by user
                 user = artifact_dict['user']
                 if user not in report.deviations_by_user:
                     report.deviations_by_user[user] = []
                 report.deviations_by_user[user].append(artifact_dict)
 
-                # Group by project
                 if project_name not in report.deviations_by_project:
                     report.deviations_by_project[project_name] = []
                 report.deviations_by_project[project_name].append(artifact_dict)
@@ -368,102 +359,86 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
     # Generate Excel report
     if report.total_artifacts_found > 0:
         output_file = generate_excel_report(report, output_dir)
-        print(f"\nValidation Report Summary:")
-        print(f"  Total Artifacts: {report.total_artifacts_found}")
-        print(f"  Valid (Path & Name): {report.valid_artifacts}")
-        print(f"  Deviations: {report.deviations_found}")
+        logger.info("Validation Report Summary:")
+        logger.info(f"  Total Artifacts: {report.total_artifacts_found}")
+        logger.info(f"  Valid (Path & Name): {report.valid_artifacts}")
+        logger.info(f"  Deviations: {report.deviations_found}")
 
         if report.deviations_by_type:
-            print(f"\nDeviations by Type:")
+            logger.info("Deviations by Type:")
             for dev_type, devs in sorted(report.deviations_by_type.items(), key=lambda x: -len(x[1])):
-                print(f"  {dev_type}: {len(devs)}")
+                logger.info(f"  {dev_type}: {len(devs)}")
 
         if report.deviations_by_user:
-            print(f"\nTop Uploaders with Deviations:")
+            logger.info("Top Uploaders with Deviations:")
             sorted_users = sorted(report.deviations_by_user.items(), key=lambda x: len(x[1]), reverse=True)[:5]
             for user, devs in sorted_users:
-                print(f"  {user}: {len(devs)}")
+                logger.info(f"  {user}: {len(devs)}")
 
         return output_file
     else:
-        print("  No artifacts found to validate")
+        logger.info("No artifacts found to validate")
         return None
 
 
 def run_workflow(excel_file: str):
-    print("\n=== Starting Complete Workflow (Optimized Recursive Version) ===\n")
+    logger.info("=" * 60)
+    logger.info("Starting Complete Workflow (Optimized Recursive Version)")
+    logger.info("=" * 60)
 
     try:
-        # Import config for run-time access
         import config
 
-        # Convert input path to absolute path
         excel_path = Path(excel_file).resolve()
 
-        # Initialize directories and copy Excel file
         base_output_dir, run_dir, excel_copy_path = DirectoryHandler.initialize_directories(excel_path)
 
-        print(f"Input Excel: {excel_path}")
-        print(f"Excel copy: {excel_copy_path}")
-        print(f"Base output directory: {base_output_dir}")
-        print(f"Run directory: {run_dir}")
+        logger.info(f"Input Excel: {excel_path}")
+        logger.info(f"Excel copy: {excel_copy_path}")
+        logger.info(f"Base output directory: {base_output_dir}")
+        logger.info(f"Run directory: {run_dir}")
 
-        # Verify that the run directory was properly set in config
         if not DirectoryHandler.ensure_run_directory_set():
             raise ValueError("Failed to properly initialize run directory in config!")
 
         current_run_dir = DirectoryHandler.get_current_run_dir()
-        print(f"Verified config run directory: {current_run_dir}")
+        logger.debug(f"Verified config run directory: {current_run_dir}")
 
-        # Step 1: Extract artifacts from TIS (using optimized recursive extractor)
-        print("\nStep 1: Extracting artifacts from TIS (Optimized Recursive Search)")
-        print("       This version finds ALL artifacts, including misplaced ones.")
+        # Step 1: Extract artifacts from TIS
+        logger.info("")
+        logger.info("Step 1: Extracting artifacts from TIS (Optimized Recursive Search)")
+        logger.info("       This version finds ALL artifacts, including misplaced ones.")
         if not extract_artifacts():
             raise ValueError("Failed to extract artifacts from TIS")
 
-        # DEBUG: List all JSON files created
-        print("\nDEBUG: Checking created JSON files...")
+        # Find JSON files
+        logger.debug("Checking created JSON files...")
         all_json_files = list(current_run_dir.glob("*.json"))
-        print(f"All JSON files in run directory:")
-        for json_file in all_json_files:
-            print(f"  - {json_file.name} (size: {json_file.stat().st_size} bytes)")
+        logger.debug(f"All JSON files in run directory: {[f.name for f in all_json_files]}")
 
-        # Find the most recent LATEST artifacts file (this is what we need for mapping)
         latest_artifact_files = list(current_run_dir.glob(f'{LATEST_JSON_PREFIX}_*.json'))
-        print(f"\nLooking for files matching pattern: {LATEST_JSON_PREFIX}_*.json")
-        print(f"Found {len(latest_artifact_files)} latest artifact files:")
-        for f in latest_artifact_files:
-            print(f"  - {f.name}")
+        logger.debug(f"Found {len(latest_artifact_files)} latest artifact files")
 
         if not latest_artifact_files:
-            # Fallback: check for regular artifact files
-            print("No latest artifact files found, checking for regular artifact files...")
+            logger.warning("No latest artifact files found, checking for regular artifact files...")
             artifact_files = list(current_run_dir.glob(f'{JSON_OUTPUT_PREFIX}_*.json'))
-            print(f"Found {len(artifact_files)} regular artifact files:")
-            for f in artifact_files:
-                print(f"  - {f.name}")
 
             if not artifact_files:
                 exit_with_error("No JSON files found at all!")
 
-            # Use the regular artifacts file as fallback
             latest_file = max(artifact_files, key=lambda x: x.stat().st_mtime)
-            print(f"Using regular artifacts file as fallback: {latest_file.name}")
+            logger.info(f"Using regular artifacts file as fallback: {latest_file.name}")
         else:
-            # Use the most recent latest artifacts file
             latest_file = max(latest_artifact_files, key=lambda x: x.stat().st_mtime)
-            print(f"Using latest artifacts file: {latest_file.name}")
+            logger.info(f"Using latest artifacts file: {latest_file.name}")
 
-        # DEBUG: Check the content of the JSON file
-        print(f"\nDEBUG: Checking JSON file content...")
+        # Load JSON data
         try:
             with open(latest_file, 'r', encoding='utf-8') as f:
                 json_data = json.load(f)
-                print(f"[OK] Successfully loaded JSON data from {latest_file.name}")
-                print(f"  File size: {latest_file.stat().st_size} bytes")
-                print(f"  Number of projects: {len(json_data)}")
+                logger.info(f"Successfully loaded JSON data from {latest_file.name}")
+                logger.info(f"  Number of projects: {len(json_data)}")
 
-                # Check if any projects have software lines with artifacts
                 total_sw_lines = 0
                 lines_with_artifacts = 0
                 for project_name, project_data in json_data.items():
@@ -473,23 +448,21 @@ def run_workflow(excel_file: str):
                         if sw_line_data.get('latest_artifact'):
                             lines_with_artifacts += 1
 
-                print(f"  Total software lines: {total_sw_lines}")
-                print(f"  Software lines with artifacts: {lines_with_artifacts}")
+                logger.info(f"  Total software lines: {total_sw_lines}")
+                logger.info(f"  Software lines with artifacts: {lines_with_artifacts}")
 
                 if lines_with_artifacts == 0:
-                    print("  WARNING: No software lines have artifacts!")
-                else:
-                    print(f"  [OK] Found {lines_with_artifacts} software lines with artifacts")
+                    logger.warning("No software lines have artifacts!")
 
         except Exception as e:
             exit_with_error(f"Error reading JSON file {latest_file}: {e}")
 
         # Step 2: Create Excel mapping
-        print("\nStep 2: Creating Excel mapping")
+        logger.info("")
+        logger.info("Step 2: Creating Excel mapping")
         excel_handler = ExcelHandler()
 
-        # Get Excel data from the copied Excel file
-        print(f"Reading from: {excel_copy_path}")
+        logger.info(f"Reading from: {excel_copy_path}")
         excel_data, error = excel_handler.get_excel_data(str(excel_copy_path))
         if error:
             exit_with_error(f"Error reading Excel file: {error}")
@@ -497,35 +470,32 @@ def run_workflow(excel_file: str):
         software_lines = excel_data['software_lines']
         project_data = excel_data['project_data']
 
-        print(f"Excel data loaded:")
-        print(f"  Software lines from Excel: {len(software_lines)}")
-        print(f"  Project data entries: {len(project_data)}")
+        logger.info("Excel data loaded:")
+        logger.info(f"  Software lines from Excel: {len(software_lines)}")
+        logger.info(f"  Project data entries: {len(project_data)}")
 
-        # Create mapping and generate report
-        print("\nCreating mapping and generating report")
+        logger.info("Creating mapping and generating report")
         mapping = excel_handler.create_mapping(software_lines, json_data, project_data)
 
-        # Generate output file path using DirectoryHandler
         output_file = DirectoryHandler.get_output_file_path(EXCEL_OUTPUT_PREFIX, "xlsx")
 
-        # Generate report
         success, error = excel_handler.generate_report(mapping, output_file)
         if not success:
             exit_with_error(f"Error generating report: {error}")
 
-        print(f"\nWorkflow completed successfully!")
-        print(f"Final report: {output_file}")
+        logger.info(f"Workflow completed successfully!")
+        logger.info(f"Final report: {output_file}")
 
         # Step 3 (Optional): Generate validation report
         validation_report_file = None
         if GENERATE_VALIDATION_REPORT:
             validation_report_file = generate_validation_report(json_data, current_run_dir)
             if validation_report_file:
-                print(f"Validation report: {validation_report_file}")
+                logger.info(f"Validation report: {validation_report_file}")
 
         # Open the Excel files
         if AUTO_OPEN_REPORT:
-            print("\nOpening Excel file...")
+            logger.info("Opening Excel file...")
             open_excel_file(output_file)
             if validation_report_file and GENERATE_VALIDATION_REPORT:
                 open_excel_file(Path(validation_report_file))
@@ -534,13 +504,14 @@ def run_workflow(excel_file: str):
         if OPEN_ARTIFACT_VIEWER:
             launch_artifact_viewer(latest_file)
 
-        print("\n=== Workflow Finished ===")
+        logger.info("=" * 60)
+        logger.info("Workflow Finished")
+        logger.info("=" * 60)
 
     except Exception as e:
-        print(f"\nUnexpected error in workflow: {e}")
-        # Print additional debug info
+        logger.error(f"Unexpected error in workflow: {e}")
         import config
-        print(f"DEBUG: Current config.CURRENT_RUN_DIR = {config.CURRENT_RUN_DIR}")
+        logger.debug(f"Current config.CURRENT_RUN_DIR = {config.CURRENT_RUN_DIR}")
         return False
     return True
 
@@ -552,38 +523,31 @@ def resolve_excel_path(file_path: str) -> Path:
     """
     path = Path(file_path)
 
-    # If absolute path, use as-is
     if path.is_absolute():
         return path
 
-    # If relative, resolve from script directory
     script_dir = Path(__file__).resolve().parent
     return (script_dir / path).resolve()
 
 
 if __name__ == "__main__":
-    # Determine which Excel file to use
     if len(sys.argv) >= 2:
-        # Use command-line argument
         excel_file = sys.argv[1]
-        print(f"Using Excel file from argument: {excel_file}")
+        logger.info(f"Using Excel file from argument: {excel_file}")
     else:
-        # Use default from configuration
         excel_file = DEFAULT_EXCEL_FILE
-        print(f"No argument provided, using default: {excel_file}")
+        logger.info(f"No argument provided, using default: {excel_file}")
 
-    # Resolve the path
     resolved_path = resolve_excel_path(excel_file)
 
-    # Check if file exists
     if not resolved_path.exists():
-        print(f"\nError: Excel file not found: {resolved_path}")
-        print(f"\nTo fix this, either:")
-        print(f"  1. Update DEFAULT_EXCEL_FILE in config.py")
-        print(f"  2. Pass the file path as an argument: python run_workflow.py <excel_file>")
+        logger.error(f"Excel file not found: {resolved_path}")
+        logger.info("To fix this, either:")
+        logger.info("  1. Update DEFAULT_EXCEL_FILE in config.py")
+        logger.info("  2. Pass the file path as an argument: python run_workflow.py <excel_file>")
         sys.exit(1)
 
-    print(f"Resolved path: {resolved_path}")
+    logger.info(f"Resolved path: {resolved_path}")
 
     success = run_workflow(str(resolved_path))
     sys.exit(0 if success else 1)
