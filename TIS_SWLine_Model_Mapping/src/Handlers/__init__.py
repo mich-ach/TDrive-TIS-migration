@@ -354,20 +354,24 @@ class ExcelHandler:
     def clean_software_line(self, sw_line: str) -> str:
         """
         Clean software line for matching:
-        - Remove everything after underscore or space
-        - Remove special characters and brackets
-        - Remove whitespace
+        - Remove everything after underscore, space, dash, or opening bracket
+        - Remove special characters (dots, etc.)
+        - Return uppercase for case-insensitive matching
+
+        Examples:
+            "MED17.1.10-6.1" -> "MED17110" (split at dash, remove dots)
+            "MG1CS001_test" -> "MG1CS001" (split at underscore)
         """
         if not sw_line:
             return ""
 
-        # First, take everything before underscore or space or opening bracket
-        cleaned = re.split(r'[_\s\(\[\{]', sw_line)[0]
+        # First, take everything before underscore, space, dash, or opening bracket
+        cleaned = re.split(r'[_\s\-\(\[\{]', sw_line)[0]
 
-        # Remove special characters
+        # Remove special characters (dots, etc.)
         cleaned = re.sub(r'[^a-zA-Z0-9]', '', cleaned)
 
-        return cleaned.strip().upper()  # Return uppercase for case-insensitive matching
+        return cleaned.strip().upper()
 
     def create_mapping(self, software_lines: List[str], json_data: Dict[str, Any],
                        master_data: Dict[str, Dict[str, str]]) -> Dict[str, Any]:
