@@ -30,6 +30,8 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 from version_parser import VersionParser
+from datetime_utils import convert_ticks_to_iso, parse_ticks_to_datetime
+from artifact_filter import ArtifactFilter
 
 # Import config properly
 import config
@@ -110,123 +112,12 @@ logging.basicConfig(
 logger.setLevel(_log_level)
 
 
-def _get_life_cycle_status(attributes: List[Dict]) -> Optional[str]:
-    """Get the lifeCycleStatus value from attributes."""
-    for attr in attributes:
-        if attr.get('name') == 'lifeCycleStatus':
-            return attr.get('value')
-    return None
+# =============================================================================
+# SHARED FILTER INSTANCE
+# =============================================================================
 
-
-def _convert_ticks_to_iso(ticks_value: str) -> Optional[str]:
-    """
-    Convert .NET DateTime ticks to formatted date string.
-
-    .NET DateTime ticks are 100-nanosecond intervals since January 1, 0001.
-    TIS API returns dates in this format (e.g., "638349664128090000").
-
-    The output format is configurable via DATE_DISPLAY_FORMAT in config.json.
-    Default format: "%d-%m-%Y %H:%M:%S" (e.g., "03-10-2023 09:06:28")
-    """
-    if not ticks_value:
-        return None
-
-    try:
-        # Check if it's already an ISO date string - convert to configured format
-        if 'T' in str(ticks_value) or '-' in str(ticks_value):
-            # Try to parse ISO format and reformat
-            try:
-                iso_str = str(ticks_value)
-                if iso_str.endswith('Z'):
-                    iso_str = iso_str[:-1]
-                dt = datetime.datetime.fromisoformat(iso_str.split('.')[0])
-                return dt.strftime(DATE_DISPLAY_FORMAT)
-            except (ValueError, TypeError):
-                return str(ticks_value)
-
-        # Convert .NET ticks (100-nanosecond intervals since 0001-01-01)
-        ticks = int(ticks_value)
-
-        # .NET epoch is January 1, 0001
-        # Unix epoch is January 1, 1970
-        # Difference in seconds: 62135596800
-        DOTNET_EPOCH_DIFF = 62135596800
-
-        # Convert 100-nanosecond intervals to seconds
-        unix_timestamp = (ticks / 10_000_000) - DOTNET_EPOCH_DIFF
-
-        # Convert to datetime and format using configured display format
-        dt = datetime.datetime.utcfromtimestamp(unix_timestamp)
-        return dt.strftime(DATE_DISPLAY_FORMAT)
-    except (ValueError, TypeError, OSError):
-        return None
-
-
-def _parse_ticks_to_datetime(ticks_value: str) -> Optional[datetime.datetime]:
-    """
-    Parse .NET DateTime ticks to a Python datetime object.
-
-    Handles both ticks format (e.g., "638349664128090000") and ISO format.
-    Returns None if parsing fails.
-    """
-    if not ticks_value:
-        return None
-
-    try:
-        value_str = str(ticks_value)
-
-        # Check if it's ISO format (contains 'T' or '-')
-        if 'T' in value_str or '-' in value_str:
-            iso_str = value_str
-            if iso_str.endswith('Z'):
-                iso_str = iso_str[:-1] + '+00:00'
-            result = datetime.datetime.fromisoformat(iso_str.split('.')[0]).replace(
-                tzinfo=datetime.timezone.utc
-            )
-            logger.debug(f"_parse_ticks_to_datetime: ISO format '{value_str}' -> {result}")
-            return result
-
-        # Parse .NET ticks (100-nanosecond intervals since 0001-01-01)
-        ticks = int(value_str)
-        DOTNET_EPOCH_DIFF = 62135596800  # seconds between 0001-01-01 and 1970-01-01
-        unix_timestamp = (ticks / 10_000_000) - DOTNET_EPOCH_DIFF
-        result = datetime.datetime.utcfromtimestamp(unix_timestamp).replace(
-            tzinfo=datetime.timezone.utc
-        )
-        logger.debug(f"_parse_ticks_to_datetime: ticks '{value_str}' -> {result}")
-        return result
-    except (ValueError, TypeError, OSError) as e:
-        logger.debug(f"_parse_ticks_to_datetime: failed to parse '{ticks_value}': {e}")
-        return None
-
-
-def _is_artifact_deleted(attributes: List[Dict]) -> bool:
-    """
-    Check if an artifact is deleted based on tisFileDeletedDate attribute.
-
-    An artifact is considered deleted only if:
-    1. It has a tisFileDeletedDate attribute with a non-null value
-    2. The deletion date has already passed (is in the past)
-
-    If the deletion date is in the future or cannot be parsed, the artifact
-    is NOT considered deleted (safe default - don't exclude artifacts we're unsure about).
-    """
-    for attr in attributes:
-        if attr.get('name') == 'tisFileDeletedDate':
-            deleted_date_str = attr.get('value')
-            logger.debug(f"_is_artifact_deleted: found tisFileDeletedDate, raw value={deleted_date_str!r}, type={type(deleted_date_str).__name__}")
-            if deleted_date_str:
-                deleted_date = _parse_ticks_to_datetime(deleted_date_str)
-                logger.debug(f"_is_artifact_deleted: parsed to {deleted_date}")
-                if deleted_date:
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    is_deleted = deleted_date <= now
-                    logger.debug(f"_is_artifact_deleted: deleted_date={deleted_date}, now={now}, is_deleted={is_deleted}")
-                    return is_deleted
-                # If date parsing fails, assume NOT deleted (safe default)
-                logger.debug(f"_is_artifact_deleted: parsing failed, returning False")
-                return False
-    return False
+# Create a shared filter instance for this module
+_artifact_filter = ArtifactFilter()
 
 
 class TISAPIService:
@@ -583,8 +474,8 @@ class TISAPIService:
 
         if is_matching_type and is_matching_component and is_matching_grp and attributes:
             has_artifact = any(attr.get('name') == 'artifact' for attr in attributes)
-            is_deleted = _is_artifact_deleted(attributes)
-            life_cycle_status = _get_life_cycle_status(attributes)
+            is_deleted = ArtifactFilter.is_artifact_deleted(attributes)
+            life_cycle_status = ArtifactFilter.get_life_cycle_status(attributes)
 
             if has_artifact:
                 _debug_stats['has_artifact_attr'] += 1
@@ -827,7 +718,7 @@ class TISAPIService:
         # Extract created date from top-level component data (not attributes)
         created_ticks = component_data.get('created')
         if created_ticks:
-            condensed['created_date'] = _convert_ticks_to_iso(created_ticks)
+            condensed['created_date'] = convert_ticks_to_iso(created_ticks)
             logger.debug(f"Extracted created_date: {created_ticks} -> {condensed['created_date']}")
         else:
             logger.debug(f"No 'created' field in component_data. Keys: {list(component_data.keys())}")
@@ -846,11 +737,11 @@ class TISAPIService:
             elif name == 'lifeCycleStatus':
                 condensed['life_cycle_status'] = value
             elif name == 'releaseDateTime':
-                condensed['release_date_time'] = _convert_ticks_to_iso(value)
+                condensed['release_date_time'] = convert_ticks_to_iso(value)
             elif name == 'tisFileDeletedDate':
-                condensed['deleted_date'] = _convert_ticks_to_iso(value)
+                condensed['deleted_date'] = convert_ticks_to_iso(value)
                 # is_deleted is set based on whether deletion date has passed
-                is_deleted_result = _is_artifact_deleted(attributes)
+                is_deleted_result = ArtifactFilter.is_artifact_deleted(attributes)
                 condensed['is_deleted'] = is_deleted_result
                 logger.debug(f"tisFileDeletedDate: raw={value}, converted={condensed['deleted_date']}, is_deleted={is_deleted_result}")
             elif name == 'lcType':
@@ -958,8 +849,8 @@ def find_vveh_lco_components(data: Dict[str, Any]) -> List[Dict[str, Any]]:
 
         if is_matching_type and is_matching_component and is_matching_grp:
             has_artifact = any(attr.get('name') == 'artifact' for attr in attributes)
-            is_deleted = _is_artifact_deleted(attributes)
-            life_cycle_status = _get_life_cycle_status(attributes)
+            is_deleted = ArtifactFilter.is_artifact_deleted(attributes)
+            life_cycle_status = ArtifactFilter.get_life_cycle_status(attributes)
 
             # Check lifeCycleStatus filter (None or empty list disables the filter)
             is_matching_status = (

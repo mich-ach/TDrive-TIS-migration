@@ -14,25 +14,27 @@ Expected Convention:
     {Project}/{SoftwareLine}/Model/HiL/{CSP*|SWB*}/.../{vVeh artifact}
 """
 
+import datetime
 import json
+import logging
+import pickle
+import re
 import threading
 import time
-import re
-import pickle
-import datetime
 from typing import List, Dict, Any, Optional, Callable, Tuple, Set
 from pathlib import Path
-from collections import deque
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import lru_cache
-import hashlib
 
 import requests
 import ujson
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
+
+# Import shared utilities
+from datetime_utils import parse_ticks_to_datetime
+from artifact_filter import ArtifactFilter
 
 from config import (
     TIS_URL,
@@ -60,6 +62,12 @@ from config import (
 )
 
 # =============================================================================
+# LOGGING SETUP
+# =============================================================================
+
+logger = logging.getLogger(__name__)
+
+# =============================================================================
 # CONFIGURATION (loaded from config.py/config.json)
 # =============================================================================
 
@@ -67,76 +75,6 @@ CHECKPOINT_INTERVAL = 50             # Save checkpoint every N projects
 
 # Expected path patterns
 CSP_SWB_PATTERN = re.compile(r"(CSP|SWB)", re.IGNORECASE)
-
-
-# =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
-
-def _get_life_cycle_status(attributes: List[Dict]) -> Optional[str]:
-    """Get the lifeCycleStatus value from attributes."""
-    for attr in attributes:
-        if attr.get('name') == 'lifeCycleStatus':
-            return attr.get('value')
-    return None
-
-
-def _parse_ticks_to_datetime(ticks_value: str) -> Optional[datetime.datetime]:
-    """
-    Parse .NET DateTime ticks to a Python datetime object.
-
-    Handles both ticks format (e.g., "638349664128090000") and ISO format.
-    Returns None if parsing fails.
-    """
-    if not ticks_value:
-        return None
-
-    try:
-        value_str = str(ticks_value)
-
-        # Check if it's ISO format (contains 'T' or '-')
-        if 'T' in value_str or '-' in value_str:
-            iso_str = value_str
-            if iso_str.endswith('Z'):
-                iso_str = iso_str[:-1] + '+00:00'
-            return datetime.datetime.fromisoformat(iso_str.split('.')[0]).replace(
-                tzinfo=datetime.timezone.utc
-            )
-
-        # Parse .NET ticks (100-nanosecond intervals since 0001-01-01)
-        ticks = int(value_str)
-        DOTNET_EPOCH_DIFF = 62135596800  # seconds between 0001-01-01 and 1970-01-01
-        unix_timestamp = (ticks / 10_000_000) - DOTNET_EPOCH_DIFF
-        return datetime.datetime.utcfromtimestamp(unix_timestamp).replace(
-            tzinfo=datetime.timezone.utc
-        )
-    except (ValueError, TypeError, OSError):
-        return None
-
-
-def _is_artifact_deleted(attributes: List[Dict]) -> bool:
-    """
-    Check if an artifact is deleted based on tisFileDeletedDate attribute.
-
-    An artifact is considered deleted only if:
-    1. It has a tisFileDeletedDate attribute with a non-null value
-    2. The deletion date has already passed (is in the past)
-
-    If the deletion date is in the future or cannot be parsed, the artifact
-    is NOT considered deleted (safe default - don't exclude artifacts we're unsure about).
-    """
-    for attr in attributes:
-        if attr.get('name') == 'tisFileDeletedDate':
-            deleted_date_str = attr.get('value')
-            if deleted_date_str:
-                deleted_date = _parse_ticks_to_datetime(deleted_date_str)
-                if deleted_date:
-                    now = datetime.datetime.now(datetime.timezone.utc)
-                    # Only deleted if the date has passed
-                    return deleted_date <= now
-                # If date parsing fails, assume NOT deleted (safe default)
-                return False
-    return False
 
 
 # =============================================================================
@@ -357,19 +295,19 @@ class OptimizedArtifactValidator:
         except requests.exceptions.Timeout:
             elapsed = time.time() - start_time
             if self.debug_mode:
-                print(f"API request timed out after {elapsed:.1f}s: {url}")
+                logger.warning(f"API request timed out after {elapsed:.1f}s: {url}")
             return None, True, elapsed
 
         except requests.exceptions.ReadTimeout:
             elapsed = time.time() - start_time
             if self.debug_mode:
-                print(f"API read timeout after {elapsed:.1f}s: {url}")
+                logger.warning(f"API read timeout after {elapsed:.1f}s: {url}")
             return None, True, elapsed
 
         except Exception as e:
             elapsed = time.time() - start_time
             if self.debug_mode:
-                print(f"API request failed after {elapsed:.1f}s: {url} - {e}")
+                logger.error(f"API request failed after {elapsed:.1f}s: {url} - {e}")
             return None, False, elapsed
 
     def _should_skip_folder(self, folder_name: str) -> bool:
@@ -421,7 +359,7 @@ class OptimizedArtifactValidator:
                             current_depth - DEPTH_REDUCTION_STEP
                         )
                     if self.debug_mode:
-                        print(f"  [SLOW] Component {component_id} took {elapsed:.1f}s at depth {current_depth}, will use depth {self._component_depth_overrides[component_id]} next time")
+                        logger.debug(f"Slow component {component_id}: {elapsed:.1f}s at depth {current_depth}, will use depth {self._component_depth_overrides[component_id]} next time")
                 return data, current_depth
 
             # If timed out or no response, reduce depth and retry
@@ -434,14 +372,14 @@ class OptimizedArtifactValidator:
                 if new_depth >= MIN_CHILDREN_LEVEL:
                     with self.api_lock:
                         self.depth_reductions += 1
-                    print(f"  [TIMEOUT] Reducing depth from {current_depth} to {new_depth} for component {component_id}")
+                    logger.warning(f"Timeout: reducing depth {current_depth} -> {new_depth} for component {component_id}")
 
                     # Remember this component needs lower depth
                     self._component_depth_overrides[component_id] = new_depth
                     current_depth = new_depth
                 else:
                     # Already at minimum depth, give up
-                    print(f"  [FAILED] Component {component_id} timed out even at minimum depth")
+                    logger.error(f"Failed: component {component_id} timed out at minimum depth")
                     return None, current_depth
             else:
                 # Some other error, don't retry
@@ -487,8 +425,8 @@ class OptimizedArtifactValidator:
 
         if is_matching_type and is_matching_component and is_matching_grp and attributes:
             has_artifact = any(attr.get('name') == 'artifact' for attr in attributes)
-            is_deleted = _is_artifact_deleted(attributes)
-            life_cycle_status = _get_life_cycle_status(attributes)
+            is_deleted = ArtifactFilter.is_artifact_deleted(attributes)
+            life_cycle_status = ArtifactFilter.get_life_cycle_status(attributes)
 
             # Check lifeCycleStatus filter (None or empty list disables the filter)
             is_matching_status = (
@@ -623,7 +561,7 @@ class OptimizedArtifactValidator:
             return artifacts
 
         if self.debug_mode:
-            print(f"    Fetched {sw_line_name} at depth {depth_used}")
+            logger.debug(f"Fetched {sw_line_name} at depth {depth_used}")
 
         # Extract all artifact candidates from the tree
         candidates: List[Tuple[str, str, List[str], Dict]] = []
@@ -659,7 +597,7 @@ class OptimizedArtifactValidator:
                         artifacts.extend(leaf_artifacts)
                     except Exception as e:
                         if self.debug_mode:
-                            print(f"Error processing leaf: {e}")
+                            logger.error(f"Error processing leaf: {e}")
 
                 # Rate limiting between batches
                 if self.rate_limit_delay > 0:
@@ -734,7 +672,7 @@ class OptimizedArtifactValidator:
             pickle.dump(checkpoint, f)
 
         if self.debug_mode:
-            print(f"Checkpoint saved: {len(processed_ids)} projects processed")
+            logger.debug(f"Checkpoint saved: {len(processed_ids)} projects processed")
 
     def _load_checkpoint(self) -> Optional[Checkpoint]:
         """Load checkpoint if exists."""
@@ -744,7 +682,7 @@ class OptimizedArtifactValidator:
                 with open(checkpoint_file, 'rb') as f:
                     return pickle.load(f)
             except Exception as e:
-                print(f"Warning: Could not load checkpoint: {e}")
+                logger.warning(f"Could not load checkpoint: {e}")
         return None
 
     def run_validation(self, resume: bool = False) -> ValidationReport:
@@ -773,36 +711,36 @@ class OptimizedArtifactValidator:
                 processed_project_ids = checkpoint.processed_project_ids
                 start_index = checkpoint.last_project_index
                 # Restore artifacts (would need to reconstruct ArtifactInfo objects)
-                print(f"Resuming from checkpoint: {len(processed_project_ids)} projects already processed")
+                logger.info(f"Resuming from checkpoint: {len(processed_project_ids)} projects already processed")
 
         try:
-            print("=" * 80)
-            print("OPTIMIZED ARTIFACT STRUCTURE VALIDATOR")
-            print("=" * 80)
-            print(f"Settings:")
-            print(f"  - Concurrent requests: {self.concurrent_requests}")
-            print(f"  - Children level: {self.children_level} (min: {MIN_CHILDREN_LEVEL})")
-            print(f"  - Adaptive timeout: {ADAPTIVE_TIMEOUT_THRESHOLD}s (reduces depth on slow response)")
-            print(f"  - Cache enabled: {self.enable_cache}")
-            print(f"  - Pruning enabled: {self.enable_pruning}")
-            print("=" * 80)
+            logger.info("=" * 60)
+            logger.info("OPTIMIZED ARTIFACT STRUCTURE VALIDATOR")
+            logger.info("=" * 60)
+            logger.info("Settings:")
+            logger.info(f"  Concurrent requests: {self.concurrent_requests}")
+            logger.info(f"  Children level: {self.children_level} (min: {MIN_CHILDREN_LEVEL})")
+            logger.info(f"  Adaptive timeout: {ADAPTIVE_TIMEOUT_THRESHOLD}s")
+            logger.info(f"  Cache enabled: {self.enable_cache}")
+            logger.info(f"  Pruning enabled: {self.enable_pruning}")
+            logger.info("=" * 60)
 
             # Fetch projects
             url = f"{TIS_URL}790066?mappingType=TCI&childrenlevel=1"
             projects_data, _, _ = self._make_api_request(url)
 
             if not projects_data:
-                print("Failed to fetch projects")
+                logger.error("Failed to fetch projects")
                 return self.report
 
             project_list = projects_data.get('children', [])
             self.report.total_projects = len(project_list)
 
-            print(f"Found {self.report.total_projects} projects\n")
+            logger.info(f"Found {self.report.total_projects} projects")
 
             for project_idx, project in enumerate(project_list[start_index:], start_index + 1):
                 if self.cancel_event.is_set():
-                    print("\n[CANCELLED]")
+                    logger.warning("Cancelled")
                     break
 
                 project_id = project.get('rId')
@@ -812,7 +750,7 @@ class OptimizedArtifactValidator:
                 if project_id in processed_project_ids:
                     continue
 
-                print(f"\n[{project_idx}/{self.report.total_projects}] {project_name}")
+                logger.info(f"[{project_idx}/{self.report.total_projects}] Processing: {project_name}")
 
                 try:
                     # Get software lines
@@ -828,7 +766,7 @@ class OptimizedArtifactValidator:
                         continue
 
                     software_lines = project_data.get('children', [])
-                    print(f"  Software lines: {len(software_lines)}")
+                    logger.info(f"  Software lines: {len(software_lines)}")
 
                     # Process software lines concurrently
                     with ThreadPoolExecutor(max_workers=self.concurrent_requests) as executor:
@@ -854,10 +792,10 @@ class OptimizedArtifactValidator:
                                 with self.results_lock:
                                     self.artifacts_found.extend(sw_artifacts)
                                     if sw_artifacts:
-                                        print(f"    Found {len(sw_artifacts)} artifacts in {futures[future]}")
+                                        logger.info(f"    Found {len(sw_artifacts)} artifacts in {futures[future]}")
                             except Exception as e:
                                 if self.debug_mode:
-                                    print(f"    Error: {e}")
+                                    logger.error(f"    Error: {e}")
 
                     processed_project_ids.add(project_id)
                     self.report.processed_projects += 1
@@ -867,7 +805,7 @@ class OptimizedArtifactValidator:
                         self._save_checkpoint(processed_project_ids, project_idx)
 
                 except Exception as e:
-                    print(f"  Error: {e}")
+                    logger.error(f"  Error: {e}")
                     self.report.failed_projects.append({
                         'project_id': project_id,
                         'project_name': project_name,
@@ -887,7 +825,7 @@ class OptimizedArtifactValidator:
             return self.report
 
         except Exception as e:
-            print(f"Fatal error: {e}")
+            logger.error(f"Fatal error: {e}")
             raise
 
     def _compile_report(self, start_time: float) -> None:
@@ -926,42 +864,42 @@ class OptimizedArtifactValidator:
                 self.report.deviations_by_project[project_name].append(artifact_dict)
 
     def print_summary(self) -> None:
-        """Print optimization statistics and results summary."""
-        print("\n" + "=" * 80)
-        print("VALIDATION SUMMARY")
-        print("=" * 80)
+        """Log optimization statistics and results summary."""
+        logger.info("=" * 60)
+        logger.info("VALIDATION SUMMARY")
+        logger.info("=" * 60)
 
-        print(f"\nPerformance Metrics:")
-        print(f"  Runtime: {self.report.total_time_seconds:.1f}s")
-        print(f"  API Calls: {self.report.total_api_calls}")
-        print(f"  Cache Hits: {self.report.cache_hits}")
-        print(f"  Branches Pruned: {self.report.branches_pruned}")
+        logger.info("Performance Metrics:")
+        logger.info(f"  Runtime: {self.report.total_time_seconds:.1f}s")
+        logger.info(f"  API Calls: {self.report.total_api_calls}")
+        logger.info(f"  Cache Hits: {self.report.cache_hits}")
+        logger.info(f"  Branches Pruned: {self.report.branches_pruned}")
 
         if self.report.total_api_calls > 0:
             efficiency = self.report.cache_hits / (self.report.total_api_calls + self.report.cache_hits) * 100
-            print(f"  Cache Efficiency: {efficiency:.1f}%")
+            logger.info(f"  Cache Efficiency: {efficiency:.1f}%")
 
-        print(f"\nAdaptive Depth Statistics:")
-        print(f"  Timeout Retries: {self.report.timeout_retries}")
-        print(f"  Depth Reductions: {self.report.depth_reductions}")
+        logger.info("Adaptive Depth Statistics:")
+        logger.info(f"  Timeout Retries: {self.report.timeout_retries}")
+        logger.info(f"  Depth Reductions: {self.report.depth_reductions}")
         if self._component_depth_overrides:
-            print(f"  Components with Reduced Depth: {len(self._component_depth_overrides)}")
+            logger.info(f"  Components with Reduced Depth: {len(self._component_depth_overrides)}")
 
-        print(f"\nResults:")
-        print(f"  Projects Processed: {self.report.processed_projects}/{self.report.total_projects}")
-        print(f"  Artifacts Found: {self.report.total_artifacts_found}")
-        print(f"  Valid: {self.report.valid_artifacts}")
-        print(f"  Deviations: {self.report.deviations_found}")
+        logger.info("Results:")
+        logger.info(f"  Projects Processed: {self.report.processed_projects}/{self.report.total_projects}")
+        logger.info(f"  Artifacts Found: {self.report.total_artifacts_found}")
+        logger.info(f"  Valid: {self.report.valid_artifacts}")
+        logger.info(f"  Deviations: {self.report.deviations_found}")
 
         if self.report.deviations_by_user:
-            print(f"\nTop Uploaders with Deviations:")
+            logger.info("Top Uploaders with Deviations:")
             sorted_users = sorted(
                 self.report.deviations_by_user.items(),
                 key=lambda x: len(x[1]),
                 reverse=True
             )[:5]
             for user, devs in sorted_users:
-                print(f"  {user}: {len(devs)} deviations")
+                logger.info(f"  {user}: {len(devs)} deviations")
 
     def save_report(self, output_dir: Path) -> str:
         """Save report to JSON file."""
@@ -971,7 +909,7 @@ class OptimizedArtifactValidator:
         with open(output_file, 'w', encoding='utf-8') as f:
             json.dump(self.report.to_dict(), f, indent=2, default=str)
 
-        print(f"\nReport saved: {output_file}")
+        logger.info(f"Report saved: {output_file}")
         return str(output_file)
 
     def set_progress_callback(self, callback: Callable[[int, int], None]):
@@ -1002,8 +940,8 @@ def generate_excel_report(report: ValidationReport, output_dir: Optional[Path] =
         from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
         from openpyxl.utils import get_column_letter
     except ImportError:
-        print("Warning: openpyxl not installed. Skipping Excel report generation.")
-        print("Install with: pip install openpyxl")
+        logger.warning("openpyxl not installed. Skipping Excel report generation.")
+        logger.info("Install with: pip install openpyxl")
         return ""
 
     if output_dir is None:
@@ -1252,7 +1190,7 @@ def generate_excel_report(report: ValidationReport, output_dir: Optional[Path] =
 
     # Save workbook
     wb.save(output_file)
-    print(f"Excel report saved: {output_file}")
+    logger.info(f"Excel report saved: {output_file}")
 
     return str(output_file)
 
@@ -1263,9 +1201,16 @@ def generate_excel_report(report: ValidationReport, output_dir: Optional[Path] =
 
 def main():
     """Run optimized validation."""
-    print("\n" + "=" * 80)
-    print("ARTIFACT STRUCTURE VALIDATOR - OPTIMIZED VERSION")
-    print("=" * 80)
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S'
+    )
+
+    logger.info("=" * 60)
+    logger.info("ARTIFACT STRUCTURE VALIDATOR - OPTIMIZED VERSION")
+    logger.info("=" * 60)
 
     # Parse command line arguments (simple version)
     import sys
@@ -1282,7 +1227,7 @@ def main():
         elif arg == '--resume':
             resume = True
         elif arg == '--help':
-            print("""
+            logger.info("""
 Usage: python artifact_structure_validator_optimized.py [OPTIONS]
 
 Options:
@@ -1315,9 +1260,9 @@ Options:
         component_depth_overrides=validator._component_depth_overrides
     )
 
-    print("\n" + "=" * 80)
-    print("VALIDATION COMPLETE")
-    print("=" * 80)
+    logger.info("=" * 60)
+    logger.info("VALIDATION COMPLETE")
+    logger.info("=" * 60)
 
 
 if __name__ == "__main__":
