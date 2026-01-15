@@ -2,11 +2,26 @@
 
 This module defines dataclasses for structured data throughout the application,
 replacing the use of untyped dictionaries.
+
+Classes:
+    LifeCycleStatus: Enum for artifact lifecycle status values
+    DeviationType: Enum for path/naming deviation types
+    ArtifactInfo: TIS artifact with all metadata
+    SoftwareLine: Software line with its artifacts
+    Project: TIS project containing software lines
+    MappingEntry: Mapping between Excel software line and TIS data
+    ValidationResult: Result of artifact path/naming validation
+    ValidationReport: Aggregated validation report for multiple artifacts
+    ExtractionStatistics: Statistics from artifact extraction process
+    APIResponse: Wrapper for TIS API response data
+    RunContext: Context for a single execution run
+    ValidatedArtifact: Validated artifact with deviation tracking
+    Checkpoint: Checkpoint for resume capability in validation runs
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, asdict
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Set
 from enum import Enum
 
 
@@ -31,6 +46,7 @@ class LifeCycleStatus(Enum):
 class DeviationType(Enum):
     """Types of path/naming deviations for validation."""
     VALID = "VALID"
+    # Path deviations
     MISSING_MODEL = "MISSING_MODEL"
     MISSING_HIL = "MISSING_HIL"
     MISSING_SIL = "MISSING_SIL"
@@ -38,7 +54,9 @@ class DeviationType(Enum):
     CSP_SWB_UNDER_MODEL = "CSP_SWB_UNDER_MODEL"
     WRONG_LOCATION = "WRONG_LOCATION"
     INVALID_SUBFOLDER = "INVALID_SUBFOLDER"
+    # Naming deviations
     INVALID_NAME_FORMAT = "INVALID_NAME_FORMAT"
+    NAME_MISMATCH = "NAME_MISMATCH"
 
 
 @dataclass
@@ -221,11 +239,24 @@ class ValidationReport:
     total_artifacts_found: int = 0
     valid_artifacts: int = 0
     deviations_found: int = 0
+    # Performance metrics (used by optimized validator)
+    total_api_calls: int = 0
+    total_time_seconds: float = 0.0
+    cache_hits: int = 0
+    branches_pruned: int = 0
+    depth_reductions: int = 0
+    timeout_retries: int = 0
+    # Results collections
     valid_paths: List[Dict[str, Any]] = field(default_factory=list)
     deviations: List[Dict[str, Any]] = field(default_factory=list)
     deviations_by_type: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     deviations_by_user: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
     deviations_by_project: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+    failed_projects: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        return asdict(self)
 
 
 @dataclass
@@ -273,3 +304,36 @@ class RunContext:
     def is_initialized(self) -> bool:
         """Check if context is properly initialized."""
         return self.run_dir is not None and self.output_dir is not None
+
+
+@dataclass
+class ValidatedArtifact:
+    """Information about a validated artifact with deviation tracking."""
+    component_id: str
+    component_name: str
+    path: str
+    component_type: str
+    user: Optional[str] = None
+    upload_date: Optional[str] = None
+    life_cycle_status: Optional[str] = None
+    is_deleted: bool = False
+    deleted_date: Optional[str] = None
+    deviation_type: DeviationType = DeviationType.VALID
+    deviation_details: str = ""
+    expected_path_hint: str = ""
+    tis_link: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for JSON serialization."""
+        result = asdict(self)
+        result['deviation_type'] = self.deviation_type.value
+        return result
+
+
+@dataclass
+class Checkpoint:
+    """Checkpoint for resume capability in validation runs."""
+    timestamp: str
+    processed_project_ids: Set[str]
+    artifacts_found: List[Dict[str, Any]]
+    last_project_index: int

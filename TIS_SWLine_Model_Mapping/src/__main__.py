@@ -25,18 +25,18 @@ import json
 import logging
 import os
 import platform
+import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Optional, NoReturn
 
-from directory_handler import DirectoryHandler
-from tis_artifact_extractor import TISAPIService, main as extract_artifacts
-from excel_handler import ExcelHandler
+from Handlers import DirectoryHandler, ExcelHandler
+from Extractors import run_extraction as extract_artifacts
+from Models import DeviationType, ValidationReport
 
-# Import all settings from config
+# Import settings from config
 from config import (
-    OUTPUT_DIR,
     JSON_OUTPUT_PREFIX,
     LATEST_JSON_PREFIX,
     EXCEL_OUTPUT_PREFIX,
@@ -45,6 +45,8 @@ from config import (
     GENERATE_VALIDATION_REPORT,
     OPEN_ARTIFACT_VIEWER,
     LOG_LEVEL,
+    TIS_LINK_TEMPLATE,
+    NAMING_CONVENTION_ENABLED,
 )
 
 # Setup logging
@@ -107,188 +109,22 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
     2. Naming convention: Based on patterns in config.json
     """
     try:
-        from artifact_structure_validator_optimized import (
-            ValidationReport,
-            DeviationType,
-            generate_excel_report
-        )
-        from config import (
-            TIS_LINK_TEMPLATE,
-            NAMING_CONVENTION_ENABLED,
-            NAMING_CONVENTION_PATTERNS,
-            PATH_CONVENTION_ENABLED,
-            PATH_EXPECTED_STRUCTURE,
-            PATH_MODEL_SUBFOLDERS,
-            PATH_VALID_SUBFOLDERS_HIL,
-        )
+        from Reports import generate_excel_report
+        from Validators import PathValidator
     except ImportError as e:
-        logger.warning(f"Could not import validation module: {e}")
+        logger.warning(f"Could not import validation modules: {e}")
         return None
 
     logger.info("Step 3: Generating Validation Report (Path & Naming Deviations)")
     logger.info("       Analyzing artifact paths and names for convention compliance...")
 
-    import re
+    # Create path validator instance
+    path_validator = PathValidator()
 
     # Build validation report from extracted data
-    report = ValidationReport()
-    report.timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Compile naming convention patterns
-    compiled_patterns = {}
-    if NAMING_CONVENTION_ENABLED and NAMING_CONVENTION_PATTERNS:
-        for pattern_name, pattern_config in NAMING_CONVENTION_PATTERNS.items():
-            try:
-                compiled_patterns[pattern_name] = {
-                    'regex': re.compile(pattern_config['pattern']),
-                    'description': pattern_config.get('description', ''),
-                    'example': pattern_config.get('example', '')
-                }
-            except re.error as e:
-                logger.warning(f"Invalid regex for pattern '{pattern_name}': {e}")
-
-    def validate_naming_convention(artifact_name: str) -> tuple:
-        """Validate artifact name against configured patterns."""
-        if not NAMING_CONVENTION_ENABLED or not compiled_patterns:
-            return (True, None, None, None)
-
-        for pattern_name, pattern_data in compiled_patterns.items():
-            match = pattern_data['regex'].match(artifact_name)
-            if match:
-                return (True, pattern_name, match.groupdict(), None)
-
-        return (False, None, None, "Name does not match any known pattern")
-
-    def get_model_subfolders_for_component(component_name: str) -> list:
-        """Get expected model subfolders for a component_name by matching patterns."""
-        if not component_name:
-            return []
-
-        if component_name in PATH_MODEL_SUBFOLDERS:
-            return PATH_MODEL_SUBFOLDERS[component_name]
-
-        for pattern, subfolders in PATH_MODEL_SUBFOLDERS.items():
-            if pattern.startswith('_comment'):
-                continue
-            if component_name.startswith(pattern):
-                return subfolders
-
-        if 'MDL' in component_name and 'SiL' not in component_name:
-            return PATH_VALID_SUBFOLDERS_HIL
-
-        return []
-
-    def get_expected_structure_for_component(component_name: str) -> str:
-        """Get expected path structure for a component_name."""
-        if not component_name:
-            return ""
-
-        if component_name in PATH_EXPECTED_STRUCTURE:
-            return PATH_EXPECTED_STRUCTURE[component_name]
-
-        for pattern, structure in PATH_EXPECTED_STRUCTURE.items():
-            if pattern.startswith('_comment'):
-                continue
-            if component_name.startswith(pattern):
-                return structure
-
-        return ""
-
-    def validate_path_convention(path: str, artifact_name: str, component_name: str = None) -> tuple:
-        """Validate path against configured convention based on component_name."""
-        if not PATH_CONVENTION_ENABLED:
-            return (DeviationType.VALID, "", "")
-
-        path_parts = path.split('/') if path else []
-
-        if len(path_parts) < 2:
-            return (
-                DeviationType.WRONG_LOCATION,
-                "Path too short",
-                "[Project]/[SWLine]/Model/HiL|SiL/[subfolder]/..."
-            )
-
-        project = path_parts[0]
-        sw_line = path_parts[1] if len(path_parts) > 1 else "Unknown"
-
-        if 'Model' not in path_parts:
-            return (
-                DeviationType.MISSING_MODEL,
-                "Artifact not under 'Model' folder",
-                f"{project}/{sw_line}/Model/..."
-            )
-
-        model_index = path_parts.index('Model')
-        remaining = path_parts[model_index + 1:]
-
-        is_hil_path = 'HiL' in remaining
-        is_sil_path = 'SiL' in remaining
-
-        expected_structure = get_expected_structure_for_component(component_name) if component_name else ""
-        model_subfolders = get_model_subfolders_for_component(component_name) if component_name else []
-
-        if not is_hil_path and not is_sil_path:
-            if remaining and any(sf in remaining[0] for sf in PATH_VALID_SUBFOLDERS_HIL):
-                return (
-                    DeviationType.CSP_SWB_UNDER_MODEL,
-                    f"{remaining[0]} directly under Model (missing HiL)",
-                    f"{project}/{sw_line}/Model/HiL/{remaining[0]}/..."
-                )
-            return (
-                DeviationType.MISSING_HIL,
-                "Missing 'HiL' or 'SiL' folder after Model",
-                expected_structure or f"{project}/{sw_line}/Model/HiL|SiL/[subfolder]/..."
-            )
-
-        if is_hil_path:
-            hil_index = remaining.index('HiL')
-            after_hil = remaining[hil_index + 1:]
-
-            if not after_hil:
-                return (
-                    DeviationType.MISSING_CSP_SWB,
-                    "Missing subfolder after HiL",
-                    expected_structure or f"{project}/{sw_line}/Model/HiL/[CSP|SWB]/..."
-                )
-
-            first_after_hil = after_hil[0]
-            check_subfolders = model_subfolders if model_subfolders else PATH_VALID_SUBFOLDERS_HIL
-            is_valid_subfolder = any(
-                sf.lower() in first_after_hil.lower()
-                for sf in check_subfolders
-            )
-            if not is_valid_subfolder:
-                return (
-                    DeviationType.INVALID_SUBFOLDER,
-                    f"Invalid subfolder '{first_after_hil}' after HiL",
-                    expected_structure or f"{project}/{sw_line}/Model/HiL/[{'/'.join(check_subfolders)}]/..."
-                )
-
-        if is_sil_path:
-            sil_index = remaining.index('SiL')
-            after_sil = remaining[sil_index + 1:]
-
-            if not after_sil:
-                return (
-                    DeviationType.MISSING_SIL,
-                    "Missing subfolder after SiL",
-                    expected_structure or f"{project}/{sw_line}/Model/SiL/[subfolder]/..."
-                )
-
-            if model_subfolders:
-                first_after_sil = after_sil[0]
-                is_valid_subfolder = any(
-                    sf.lower() in first_after_sil.lower()
-                    for sf in model_subfolders
-                )
-                if not is_valid_subfolder:
-                    return (
-                        DeviationType.INVALID_SUBFOLDER,
-                        f"Invalid subfolder '{first_after_sil}' after SiL (expected: {', '.join(model_subfolders)})",
-                        expected_structure or f"{project}/{sw_line}/Model/SiL/[{'/'.join(model_subfolders)}]/..."
-                    )
-
-        return (DeviationType.VALID, "", "")
+    report = ValidationReport(
+        timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    )
 
     # Process all artifacts
     for project_name, project_data in json_data.items():
@@ -306,8 +142,11 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
             path = latest.get('upload_path', '')
             component_type = latest.get('component_type', '')
 
-            name_valid, matched_pattern, matched_groups, name_error = validate_naming_convention(artifact_name)
-            path_deviation, path_details, path_hint = validate_path_convention(path, artifact_name, component_type)
+            # Validate naming convention
+            name_valid, matched_pattern, matched_groups, name_error = path_validator.validate_naming_convention(artifact_name)
+
+            # Validate path convention
+            path_deviation, path_details, path_hint = path_validator.validate_path(path, artifact_name, component_type)
 
             deviation_type = DeviationType.VALID
             details = ""
@@ -322,7 +161,6 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
                 details = path_details
                 hint = path_hint
 
-            from config import TIS_LINK_TEMPLATE
             artifact_dict = {
                 'component_id': latest.get('artifact_rid', ''),
                 'component_name': artifact_name,

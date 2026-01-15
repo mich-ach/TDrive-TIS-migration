@@ -1,34 +1,190 @@
-"""Excel file handling utilities for software line mapping."""
+"""Handler classes for directory and Excel operations.
+
+This module provides classes for managing directories and Excel file operations.
+
+Classes:
+    DirectoryHandler: Handles directory operations for the TIS artifact extraction workflow
+    ExcelHandler: Handles Excel file operations for software line mapping
+"""
+
 import datetime
 import logging
 import re
+import shutil
 import traceback
+from pathlib import Path
 from typing import List, Optional, Tuple, Dict, Any
 
-from openpyxl import Workbook, load_workbook
-from openpyxl.styles import Font, PatternFill, Border, Side
-from openpyxl.utils import get_column_letter
-import json
+try:
+    from openpyxl import Workbook, load_workbook
+    from openpyxl.styles import Font, PatternFill, Border, Side
+    from openpyxl.utils import get_column_letter
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
+import config
 from config import TIS_LINK_TEMPLATE
 
-# Setup logger for this module
 logger = logging.getLogger(__name__)
+
+
+class DirectoryHandler:
+    """Handles directory operations for the TIS artifact extraction workflow."""
+
+    @staticmethod
+    def initialize_directories(excel_path: Path) -> Tuple[Path, Path, Path]:
+        """
+        Initialize output directories and copy Excel file.
+
+        Args:
+            excel_path: Path to the input Excel file
+
+        Returns:
+            Tuple of (base_output_dir, run_dir, excel_copy_path)
+
+        Raises:
+            ValueError: If Excel file not found or directory creation fails
+        """
+        try:
+            # Validate input Excel file
+            if not excel_path.exists():
+                raise ValueError(f"Excel file not found: {excel_path}")
+
+            # Ensure output directory exists
+            config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Create timestamped run directory
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            run_dir = config.OUTPUT_DIR / f"run_{timestamp}"
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy Excel file to run directory
+            excel_copy_path = run_dir / excel_path.name
+            shutil.copy2(excel_path, excel_copy_path)
+
+            # Update global config - this is crucial
+            config.CURRENT_RUN_DIR = run_dir
+
+            logger.debug(f"Set config.CURRENT_RUN_DIR to: {config.CURRENT_RUN_DIR}")
+
+            return config.OUTPUT_DIR, run_dir, excel_copy_path
+
+        except Exception as e:
+            config.CURRENT_RUN_DIR = None  # Reset on failure
+            raise ValueError(f"Failed to initialize directories: {str(e)}")
+
+    @staticmethod
+    def get_output_file_path(prefix: str, extension: str) -> Path:
+        """
+        Generate timestamped output file path.
+
+        Args:
+            prefix: Prefix for the output file
+            extension: File extension (without dot)
+
+        Returns:
+            Path object for the output file
+
+        Raises:
+            ValueError: If run directory is not initialized
+        """
+        # Always check the current state from config module
+        if not config.CURRENT_RUN_DIR or not config.CURRENT_RUN_DIR.exists():
+            raise ValueError(f"Run directory not initialized or doesn't exist! Current value: {config.CURRENT_RUN_DIR}")
+
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_path = config.CURRENT_RUN_DIR / f"{prefix}_{timestamp}.{extension}"
+
+        logger.debug(f"Generated output path: {output_path}")
+
+        return output_path
+
+    @staticmethod
+    def validate_project_structure() -> bool:
+        """
+        Validate that all required directories exist or can be created.
+
+        Returns:
+            bool: True if structure is valid, False otherwise
+        """
+        try:
+            # Check if source directory exists
+            if not config.SCRIPT_DIR.exists():
+                logger.error(f"Source directory not found at {config.SCRIPT_DIR}")
+                return False
+
+            # Create output directory if it doesn't exist
+            config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Verify write permissions
+            test_file = config.OUTPUT_DIR / ".test_write"
+            try:
+                test_file.touch()
+                test_file.unlink()
+            except Exception as e:
+                logger.error(f"No write permission in output directory: {e}")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating project structure: {e}")
+            return False
+
+    @staticmethod
+    def cleanup_old_runs(max_runs: int = 999) -> None:
+        """
+        Clean up old run directories, keeping only the most recent ones.
+
+        Args:
+            max_runs: Maximum number of run directories to keep
+        """
+        try:
+            if not config.OUTPUT_DIR.exists():
+                return
+
+            # Get all run directories sorted by creation time
+            run_dirs = sorted(
+                [d for d in config.OUTPUT_DIR.glob("run_*") if d.is_dir()],
+                key=lambda x: x.stat().st_mtime,
+                reverse=True
+            )
+
+            # Remove excess directories
+            for old_dir in run_dirs[max_runs:]:
+                try:
+                    shutil.rmtree(old_dir)
+                    logger.info(f"Cleaned up old run directory: {old_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove old directory {old_dir}: {e}")
+
+        except Exception as e:
+            logger.warning(f"Failed to clean up old runs: {e}")
+
+    @staticmethod
+    def reset_run_directory() -> None:
+        """Reset the current run directory in case of errors."""
+        config.CURRENT_RUN_DIR = None
+
+    @staticmethod
+    def get_current_run_dir() -> Optional[Path]:
+        """Get the current run directory safely."""
+        return config.CURRENT_RUN_DIR
+
+    @staticmethod
+    def ensure_run_directory_set() -> bool:
+        """Ensure run directory is properly set and exists."""
+        return (config.CURRENT_RUN_DIR is not None and
+                isinstance(config.CURRENT_RUN_DIR, Path) and
+                config.CURRENT_RUN_DIR.exists())
 
 
 class ExcelHandler:
     """Handles Excel file operations for software line mapping."""
 
     def __init__(self):
-        self.openpyxl_available = self._check_openpyxl()
-
-    def _check_openpyxl(self) -> bool:
-        """Check if openpyxl is available."""
-        try:
-            import openpyxl
-            return True
-        except ImportError:
-            return False
+        self.openpyxl_available = OPENPYXL_AVAILABLE
 
     def get_excel_data(self, file_path: str, sheet_name: Optional[str] = None) -> Tuple[Dict[str, Any], Optional[str]]:
         """
@@ -586,54 +742,3 @@ class ExcelHandler:
 
         except Exception as e:
             return [], f"Error reading Excel file: {str(e)}"
-
-
-def main():
-    """Example usage of ExcelHandler with latest_vveh_lco_artifacts data."""
-    # Configure logging for standalone execution
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
-    excel_handler = ExcelHandler()
-
-    # Paths
-    excel_file = "Kopie von Series_Maintenance_Project_List_Audi+VW_BMNr_WORK.xlsx"
-    latest_artifacts_file = r"C:\Users\ACM1WI\Documents\TIS_SWLine_Version_extractor_main\scripts\latest_vveh_lco_artifacts_20250807-193425.json"
-    output_file = f"software_line_mapping_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-
-    logger.info("Step 1: Reading Excel file")
-    logger.info(f"Reading from: {excel_file}")
-
-    # Get comprehensive Excel data
-    excel_data, error = excel_handler.get_excel_data(excel_file)
-    if error:
-        logger.error(f"Error reading Excel file: {error}")
-        return
-
-    software_lines = excel_data['software_lines']
-    project_data = excel_data['project_data']
-
-    logger.info("Step 2: Reading JSON file")
-    logger.info(f"Reading from: {latest_artifacts_file}")
-    try:
-        with open(latest_artifacts_file, 'r', encoding='utf-8') as f:
-            json_data = json.load(f)
-            logger.info(f"Successfully loaded JSON data")
-            logger.info(f"Number of projects in JSON: {len(json_data)}")
-    except Exception as e:
-        logger.error(f"Error reading latest artifacts file: {e}")
-        return
-
-    logger.info("Step 3: Creating mapping")
-    mapping = excel_handler.create_mapping(software_lines, json_data, project_data)
-
-    logger.info("Step 4: Generating report")
-    success, error = excel_handler.generate_report(mapping, output_file)
-    if not success:
-        logger.error(f"Error generating report: {error}")
-        return
-
-    logger.info(f"Report generated successfully: {output_file}")
-
-
-if __name__ == "__main__":
-    main()

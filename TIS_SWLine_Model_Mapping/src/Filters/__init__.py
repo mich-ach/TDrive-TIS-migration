@@ -4,6 +4,9 @@ This module handles all artifact filtering decisions based on:
 - Component type, name, and group
 - Life cycle status
 - Deletion status
+
+Classes:
+    ArtifactFilter: Filters artifacts based on configured criteria
 """
 
 import datetime
@@ -19,7 +22,7 @@ from config import (
     SKIP_DELETED_ARTIFACTS,
     SKIP_FOLDER_PATTERNS,
 )
-from datetime_utils import parse_ticks_to_datetime
+from Utils import parse_ticks_to_datetime
 
 logger = logging.getLogger(__name__)
 
