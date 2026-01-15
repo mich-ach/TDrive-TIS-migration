@@ -120,9 +120,16 @@ class ArtifactExtractor:
         self,
         data: Dict,
         current_path: List[str],
-        results: List[Tuple[str, str, List[str], Dict]]
+        results: List[Tuple[str, str, List[str], Dict]],
+        _stats: Dict = None
     ) -> None:
         """Recursively extract all vVeh components from a fetched tree."""
+        # Initialize stats on first call
+        if _stats is None:
+            _stats = {'visited': 0, 'with_attrs': 0, 'matches': 0}
+
+        _stats['visited'] += 1
+
         component_id = data.get('rId')
         node_name = data.get('name', 'Unknown')
         full_path = current_path + [node_name]
@@ -132,6 +139,9 @@ class ArtifactExtractor:
         component_def_name = data.get('component', {}).get('name')
         component_grp_name = data.get('componentGrp', {}).get('name')
         attributes = data.get('attributes', [])
+
+        if attributes:
+            _stats['with_attrs'] += 1
 
         # Check each filter (None means filter is disabled)
         is_matching_type = COMPONENT_TYPE_FILTER is None or component_type_name in COMPONENT_TYPE_FILTER
@@ -151,15 +161,21 @@ class ArtifactExtractor:
             if (has_artifact and
                 (not SKIP_DELETED_ARTIFACTS or not is_deleted) and
                 is_matching_status):
+                _stats['matches'] += 1
                 results.append((component_id, node_name, full_path, data))
 
         # Process children
-        for child in data.get('children', []):
+        children = data.get('children', [])
+        for child in children:
             child_name = child.get('name', 'Unknown')
             if self._should_skip_folder(child_name):
                 self.branches_pruned += 1
                 continue
-            self._extract_all_vveh_from_tree(child, full_path, results)
+            self._extract_all_vveh_from_tree(child, full_path, results, _stats)
+
+        # Log stats at root level
+        if len(current_path) == 1:
+            logger.debug(f"Tree scan: visited={_stats['visited']}, with_attrs={_stats['with_attrs']}, matches={_stats['matches']}")
 
     def _find_unexplored_leaves(
         self,
@@ -350,11 +366,11 @@ class ArtifactExtractor:
         # Fetch with adaptive children level using TISClient
         data, depth_used = self.client.get_component_adaptive(sw_line_id)
         if not data:
+            logger.warning(f"No data returned for software line '{sw_line_name}' (id={sw_line_id})")
             return artifacts
 
-        if self.debug_mode:
-            children_count = len(data.get('children', []))
-            logger.debug(f"Fetched '{sw_line_name}' at depth={depth_used}, {children_count} children")
+        children_count = len(data.get('children', []))
+        logger.debug(f"Fetched '{sw_line_name}' at depth={depth_used}, {children_count} children")
 
         # Extract all vVeh candidates from the tree
         candidates: List[Tuple[str, str, List[str], Dict]] = []

@@ -189,20 +189,22 @@ class TISClient:
 
         except requests.exceptions.Timeout:
             elapsed = time.time() - start_time
-            if self.debug_mode:
-                logger.warning(f"API request timed out after {elapsed:.1f}s: {url}")
+            logger.warning(f"API request timed out after {elapsed:.1f}s: {url}")
             return None, True, elapsed
 
         except requests.exceptions.ReadTimeout:
             elapsed = time.time() - start_time
-            if self.debug_mode:
-                logger.warning(f"API read timeout after {elapsed:.1f}s: {url}")
+            logger.warning(f"API read timeout after {elapsed:.1f}s: {url}")
             return None, True, elapsed
+
+        except requests.exceptions.ConnectionError as e:
+            elapsed = time.time() - start_time
+            logger.error(f"API connection error after {elapsed:.1f}s: {url} - {e}")
+            return None, False, elapsed
 
         except Exception as e:
             elapsed = time.time() - start_time
-            if self.debug_mode:
-                logger.error(f"API request failed after {elapsed:.1f}s: {url} - {e}")
+            logger.error(f"API request failed after {elapsed:.1f}s: {url} - {e}")
             return None, False, elapsed
 
     def get_component(
