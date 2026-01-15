@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Optional, NoReturn
 
 from Handlers import DirectoryHandler, ExcelHandler
-from tis_artifact_extractor import main as extract_artifacts
+from Extractors import run_extraction as extract_artifacts
 from Models import DeviationType, ValidationReport
 
 # Import settings from config
