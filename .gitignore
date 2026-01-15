@@ -1,1 +1,26 @@
+# Ignore input and output directories at any level
+input/
+output/
+
+.venv
+
+# Ignore all JSON files
 *.json
+
+# But keep config.json
+!config.json
+
+# Other file types to ignore
+*.xml
+*.xlsx
+*.txt
+*.html
+*.log
+*.pbr
+*.pbr_defaults
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
