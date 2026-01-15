@@ -8,6 +8,8 @@ output/
 # Ignore all JSON files
 *.json
 
+*.uuid
+
 # But keep config.json
 !config.json
 
@@ -25,3 +27,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+*vw-mdl-med*/
+
