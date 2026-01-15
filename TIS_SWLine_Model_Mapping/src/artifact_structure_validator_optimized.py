@@ -24,7 +24,6 @@ import time
 from typing import List, Dict, Any, Optional, Callable, Tuple, Set
 from pathlib import Path
 from dataclasses import dataclass, field, asdict
-from enum import Enum
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
@@ -32,9 +31,12 @@ import ujson
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# Import shared utilities
+# Import shared utilities and models
 from datetime_utils import parse_ticks_to_datetime
 from artifact_filter import ArtifactFilter
+from models import DeviationType, ValidationReport, ValidatedArtifact, Checkpoint
+from path_validator import validate_path_simple, CSP_SWB_PATTERN
+from validation_excel_report import generate_excel_report
 
 from config import (
     TIS_URL,
@@ -73,87 +75,8 @@ logger = logging.getLogger(__name__)
 
 CHECKPOINT_INTERVAL = 50             # Save checkpoint every N projects
 
-# Expected path patterns
-CSP_SWB_PATTERN = re.compile(r"(CSP|SWB)", re.IGNORECASE)
-
-
-# =============================================================================
-# DATA CLASSES
-# =============================================================================
-
-class DeviationType(Enum):
-    """Types of path and naming convention deviations."""
-    VALID = "VALID"
-    # Path deviations
-    MISSING_MODEL = "MISSING_MODEL"
-    MISSING_HIL = "MISSING_HIL"
-    MISSING_SIL = "MISSING_SIL"
-    MISSING_CSP_SWB = "MISSING_CSP_SWB"
-    CSP_SWB_UNDER_MODEL = "CSP_SWB_UNDER_MODEL"
-    WRONG_LOCATION = "WRONG_LOCATION"
-    INVALID_SUBFOLDER = "INVALID_SUBFOLDER"
-    # Naming deviations
-    INVALID_NAME_FORMAT = "INVALID_NAME_FORMAT"
-    NAME_MISMATCH = "NAME_MISMATCH"
-
-
-@dataclass
-class ArtifactInfo:
-    """Information about a found artifact."""
-    component_id: str
-    component_name: str
-    path: str
-    component_type: str
-    user: Optional[str] = None
-    upload_date: Optional[str] = None
-    life_cycle_status: Optional[str] = None
-    is_deleted: bool = False
-    deleted_date: Optional[str] = None
-    deviation_type: DeviationType = DeviationType.VALID
-    deviation_details: str = ""
-    expected_path_hint: str = ""
-    tis_link: str = ""
-
-    def to_dict(self) -> Dict[str, Any]:
-        result = asdict(self)
-        result['deviation_type'] = self.deviation_type.value
-        return result
-
-
-@dataclass
-class ValidationReport:
-    """Complete validation report."""
-    timestamp: str = field(default_factory=lambda: datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
-    total_projects: int = 0
-    processed_projects: int = 0
-    total_artifacts_found: int = 0
-    valid_artifacts: int = 0
-    deviations_found: int = 0
-    total_api_calls: int = 0
-    total_time_seconds: float = 0.0
-    cache_hits: int = 0
-    branches_pruned: int = 0
-    depth_reductions: int = 0  # Times depth was reduced due to timeout
-    timeout_retries: int = 0   # Total timeout retry attempts
-
-    valid_paths: List[Dict] = field(default_factory=list)
-    deviations: List[Dict] = field(default_factory=list)
-    deviations_by_type: Dict[str, List[Dict]] = field(default_factory=dict)
-    deviations_by_user: Dict[str, List[Dict]] = field(default_factory=dict)
-    deviations_by_project: Dict[str, List[Dict]] = field(default_factory=dict)
-    failed_projects: List[Dict] = field(default_factory=list)
-
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
-
-
-@dataclass
-class Checkpoint:
-    """Checkpoint for resume capability."""
-    timestamp: str
-    processed_project_ids: Set[str]
-    artifacts_found: List[Dict]
-    last_project_index: int
+# Note: CSP_SWB_PATTERN is imported from path_validator
+# Note: DeviationType, ValidationReport, ValidatedArtifact, Checkpoint are imported from models
 
 
 # =============================================================================
@@ -215,7 +138,7 @@ class OptimizedArtifactValidator:
         self._component_depth_overrides: Dict[str, int] = {}
 
         # Results
-        self.artifacts_found: List[ArtifactInfo] = []
+        self.artifacts_found: List[ValidatedArtifact] = []
         self.report = ValidationReport()
 
         # Compile skip patterns
@@ -458,12 +381,12 @@ class OptimizedArtifactValidator:
         component_name: str,
         path_list: List[str],
         data: Dict
-    ) -> Optional[ArtifactInfo]:
+    ) -> Optional[ValidatedArtifact]:
         """Process a potential artifact and extract details."""
         path = '/'.join(path_list)
         attributes = data.get('attributes', [])
 
-        artifact = ArtifactInfo(
+        artifact = ValidatedArtifact(
             component_id=component_id,
             component_name=component_name,
             path=path,
@@ -493,60 +416,18 @@ class OptimizedArtifactValidator:
         return artifact
 
     def _validate_path_convention(self, path: str) -> Tuple[DeviationType, str, str]:
-        """Validate artifact path against expected convention."""
-        path_parts = path.split('/')
+        """Validate artifact path against expected convention.
 
-        if len(path_parts) < 2:
-            return (
-                DeviationType.WRONG_LOCATION,
-                "Path too short",
-                "[Project]/[SWLine]/Model/HiL/[CSP|SWB]/..."
-            )
-
-        project_name = path_parts[0]
-        sw_line = path_parts[1] if len(path_parts) > 1 else "Unknown"
-
-        if 'Model' not in path_parts:
-            return (
-                DeviationType.MISSING_MODEL,
-                f"Artifact not under 'Model' folder",
-                f"{project_name}/{sw_line}/Model/HiL/[CSP|SWB]/..."
-            )
-
-        model_index = path_parts.index('Model')
-        remaining_after_model = path_parts[model_index + 1:]
-
-        if 'HiL' not in remaining_after_model:
-            if remaining_after_model and CSP_SWB_PATTERN.search(remaining_after_model[0]):
-                return (
-                    DeviationType.CSP_SWB_UNDER_MODEL,
-                    f"CSP/SWB directly under Model (missing HiL)",
-                    f"{project_name}/{sw_line}/Model/HiL/{remaining_after_model[0]}/..."
-                )
-            return (
-                DeviationType.MISSING_HIL,
-                f"Missing 'HiL' folder after Model",
-                f"{project_name}/{sw_line}/Model/HiL/[CSP|SWB]/..."
-            )
-
-        hil_index = remaining_after_model.index('HiL')
-        remaining_after_hil = remaining_after_model[hil_index + 1:]
-
-        if not remaining_after_hil or not CSP_SWB_PATTERN.search(remaining_after_hil[0]):
-            return (
-                DeviationType.MISSING_CSP_SWB,
-                f"Missing CSP/SWB folder after HiL",
-                f"{project_name}/{sw_line}/Model/HiL/[CSP|SWB]/..."
-            )
-
-        return (DeviationType.VALID, "", "")
+        Delegates to the shared validate_path_simple function from path_validator.
+        """
+        return validate_path_simple(path)
 
     def _process_software_line_concurrent(
         self,
         sw_line_id: str,
         sw_line_name: str,
         project_name: str
-    ) -> List[ArtifactInfo]:
+    ) -> List[ValidatedArtifact]:
         """
         Process a software line using optimized concurrent approach.
 
@@ -640,7 +521,7 @@ class OptimizedArtifactValidator:
         self,
         node_id: str,
         current_path: List[str]
-    ) -> List[ArtifactInfo]:
+    ) -> List[ValidatedArtifact]:
         """Explore a leaf node for more artifacts using adaptive depth."""
         artifacts = []
 
@@ -700,7 +581,9 @@ class OptimizedArtifactValidator:
         self.branches_pruned = 0
         self._response_cache.clear()
 
-        self.report = ValidationReport()
+        self.report = ValidationReport(
+            timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        )
         processed_project_ids: Set[str] = set()
         start_index = 0
 
@@ -710,7 +593,7 @@ class OptimizedArtifactValidator:
             if checkpoint:
                 processed_project_ids = checkpoint.processed_project_ids
                 start_index = checkpoint.last_project_index
-                # Restore artifacts (would need to reconstruct ArtifactInfo objects)
+                # Restore artifacts (would need to reconstruct ValidatedArtifact objects)
                 logger.info(f"Resuming from checkpoint: {len(processed_project_ids)} projects already processed")
 
         try:
@@ -919,280 +802,7 @@ class OptimizedArtifactValidator:
         self.cancel_event.set()
 
 
-# =============================================================================
-# EXCEL REPORT GENERATION
-# =============================================================================
-
-def generate_excel_report(report: ValidationReport, output_dir: Optional[Path] = None,
-                          component_depth_overrides: Optional[Dict[str, int]] = None) -> str:
-    """
-    Generate an Excel report with multiple sheets for accountability.
-
-    Sheets:
-    1. Summary - Overall statistics including adaptive depth metrics
-    2. All Deviations - Complete list of deviations
-    3. By User - Deviations grouped by uploader (accountability)
-    4. By Project - Deviations grouped by project
-    5. Valid Artifacts - List of correctly placed artifacts
-    """
-    try:
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Border, Side, Alignment
-        from openpyxl.utils import get_column_letter
-    except ImportError:
-        logger.warning("openpyxl not installed. Skipping Excel report generation.")
-        logger.info("Install with: pip install openpyxl")
-        return ""
-
-    if output_dir is None:
-        output_dir = Path('.')
-
-    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    output_file = output_dir / f"optimized_validation_report_{timestamp}.xlsx"
-
-    wb = Workbook()
-
-    # Styles
-    header_font = Font(bold=True, size=11)
-    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-    header_font_white = Font(bold=True, size=11, color="FFFFFF")
-
-    deviation_fill = PatternFill(start_color="FFE6E6", end_color="FFE6E6", fill_type="solid")
-    valid_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
-    warning_fill = PatternFill(start_color="FFF2CC", end_color="FFF2CC", fill_type="solid")
-    info_fill = PatternFill(start_color="DEEBF7", end_color="DEEBF7", fill_type="solid")
-
-    thin_border = Border(
-        left=Side(style='thin'),
-        right=Side(style='thin'),
-        top=Side(style='thin'),
-        bottom=Side(style='thin')
-    )
-
-    # ========== Sheet 1: Summary ==========
-    ws_summary = wb.active
-    ws_summary.title = "Summary"
-
-    summary_data = [
-        ["OPTIMIZED ARTIFACT STRUCTURE VALIDATION REPORT"],
-        [f"Generated: {report.timestamp}"],
-        [""],
-        ["EXECUTION STATISTICS"],
-        ["Total Projects", report.total_projects],
-        ["Processed Projects", report.processed_projects],
-        ["Failed Projects", len(report.failed_projects)],
-        ["Total API Calls", report.total_api_calls],
-        ["Runtime", f"{report.total_time_seconds:.1f} seconds"],
-        [""],
-        ["OPTIMIZATION METRICS"],
-        ["Cache Hits", report.cache_hits],
-        ["Branches Pruned", report.branches_pruned],
-        [""],
-        ["ADAPTIVE DEPTH METRICS"],
-        ["Timeout Retries", report.timeout_retries],
-        ["Depth Reductions", report.depth_reductions],
-        ["Components with Reduced Depth", len(component_depth_overrides) if component_depth_overrides else 0],
-        [""],
-        ["ARTIFACT STATISTICS"],
-        ["Total Artifacts Found", report.total_artifacts_found],
-        ["Valid Artifacts", report.valid_artifacts],
-        ["Deviations Found", report.deviations_found],
-        [""],
-        ["DEVIATIONS BY TYPE"],
-    ]
-
-    for dev_type, artifacts in report.deviations_by_type.items():
-        if artifacts:
-            summary_data.append([dev_type, len(artifacts)])
-
-    summary_data.extend([
-        [""],
-        ["TOP UPLOADERS WITH DEVIATIONS"],
-    ])
-
-    sorted_users = sorted(
-        report.deviations_by_user.items(),
-        key=lambda x: len(x[1]),
-        reverse=True
-    )[:10]
-
-    for user, devs in sorted_users:
-        summary_data.append([user, len(devs)])
-
-    for row_idx, row_data in enumerate(summary_data, 1):
-        for col_idx, value in enumerate(row_data, 1):
-            cell = ws_summary.cell(row=row_idx, column=col_idx, value=value)
-            if row_idx in [1, 4, 11, 15, 20, 25]:
-                cell.font = header_font
-
-    ws_summary.column_dimensions['A'].width = 35
-    ws_summary.column_dimensions['B'].width = 20
-
-    # ========== Sheet 2: All Deviations ==========
-    ws_deviations = wb.create_sheet("All Deviations")
-
-    deviation_headers = [
-        "Path", "Deviation Type", "Uploader", "Details",
-        "Expected Path", "Component ID", "TIS Link"
-    ]
-
-    for col_idx, header in enumerate(deviation_headers, 1):
-        cell = ws_deviations.cell(row=1, column=col_idx, value=header)
-        cell.font = header_font_white
-        cell.fill = header_fill
-        cell.border = thin_border
-
-    for row_idx, dev in enumerate(report.deviations, 2):
-        ws_deviations.cell(row=row_idx, column=1, value=dev['path']).border = thin_border
-        ws_deviations.cell(row=row_idx, column=2, value=dev['deviation_type']).border = thin_border
-        ws_deviations.cell(row=row_idx, column=3, value=dev.get('user', 'UNKNOWN')).border = thin_border
-        ws_deviations.cell(row=row_idx, column=4, value=dev.get('deviation_details', '')).border = thin_border
-        ws_deviations.cell(row=row_idx, column=5, value=dev.get('expected_path_hint', '')).border = thin_border
-        ws_deviations.cell(row=row_idx, column=6, value=dev['component_id']).border = thin_border
-
-        tis_link = dev.get('tis_link', '')
-        tis_cell = ws_deviations.cell(row=row_idx, column=7, value=tis_link)
-        if tis_link:
-            tis_cell.hyperlink = tis_link
-            tis_cell.style = "Hyperlink"
-        tis_cell.border = thin_border
-
-        # Color by deviation type
-        fill = warning_fill if dev['deviation_type'] == 'CSP_SWB_UNDER_MODEL' else deviation_fill
-        for col in range(1, 8):
-            ws_deviations.cell(row=row_idx, column=col).fill = fill
-
-    for col_idx in range(1, len(deviation_headers) + 1):
-        ws_deviations.column_dimensions[get_column_letter(col_idx)].width = 30
-
-    # ========== Sheet 3: By User (Accountability) ==========
-    ws_by_user = wb.create_sheet("By User (Accountability)")
-
-    user_headers = ["User", "Total Deviations", "Deviation Types", "Sample Paths"]
-
-    for col_idx, header in enumerate(user_headers, 1):
-        cell = ws_by_user.cell(row=1, column=col_idx, value=header)
-        cell.font = header_font_white
-        cell.fill = header_fill
-        cell.border = thin_border
-
-    row_idx = 2
-    # Use all users, not just top 10
-    all_sorted_users = sorted(
-        report.deviations_by_user.items(),
-        key=lambda x: len(x[1]),
-        reverse=True
-    )
-
-    for user, devs in all_sorted_users:
-        type_counts = {}
-        sample_paths = []
-        for d in devs:
-            dt = d['deviation_type']
-            type_counts[dt] = type_counts.get(dt, 0) + 1
-            if len(sample_paths) < 3:
-                sample_paths.append(d['path'])
-
-        type_summary = ", ".join([f"{t}: {c}" for t, c in type_counts.items()])
-        paths_summary = "\n".join(sample_paths)
-
-        ws_by_user.cell(row=row_idx, column=1, value=user).border = thin_border
-        ws_by_user.cell(row=row_idx, column=2, value=len(devs)).border = thin_border
-        ws_by_user.cell(row=row_idx, column=3, value=type_summary).border = thin_border
-
-        path_cell = ws_by_user.cell(row=row_idx, column=4, value=paths_summary)
-        path_cell.border = thin_border
-        path_cell.alignment = Alignment(wrap_text=True)
-
-        row_idx += 1
-
-    ws_by_user.column_dimensions['A'].width = 25
-    ws_by_user.column_dimensions['B'].width = 18
-    ws_by_user.column_dimensions['C'].width = 45
-    ws_by_user.column_dimensions['D'].width = 70
-
-    # ========== Sheet 4: By Project ==========
-    ws_by_project = wb.create_sheet("By Project")
-
-    project_headers = ["Project", "Total Deviations", "Uploaders Involved", "Deviation Types"]
-
-    for col_idx, header in enumerate(project_headers, 1):
-        cell = ws_by_project.cell(row=1, column=col_idx, value=header)
-        cell.font = header_font_white
-        cell.fill = header_fill
-        cell.border = thin_border
-
-    row_idx = 2
-    for project, devs in sorted(report.deviations_by_project.items(), key=lambda x: -len(x[1])):
-        users = set(d.get('user', 'UNKNOWN') for d in devs)
-        types = set(d['deviation_type'] for d in devs)
-
-        ws_by_project.cell(row=row_idx, column=1, value=project).border = thin_border
-        ws_by_project.cell(row=row_idx, column=2, value=len(devs)).border = thin_border
-        ws_by_project.cell(row=row_idx, column=3, value=", ".join(users)).border = thin_border
-        ws_by_project.cell(row=row_idx, column=4, value=", ".join(types)).border = thin_border
-
-        row_idx += 1
-
-    for col_idx in range(1, 5):
-        ws_by_project.column_dimensions[get_column_letter(col_idx)].width = 35
-
-    # ========== Sheet 5: Valid Artifacts ==========
-    ws_valid = wb.create_sheet("Valid Artifacts")
-
-    valid_headers = ["Path", "Uploader", "Component ID", "TIS Link"]
-
-    for col_idx, header in enumerate(valid_headers, 1):
-        cell = ws_valid.cell(row=1, column=col_idx, value=header)
-        cell.font = header_font_white
-        cell.fill = PatternFill(start_color="70AD47", end_color="70AD47", fill_type="solid")
-        cell.border = thin_border
-
-    for row_idx, artifact in enumerate(report.valid_paths, 2):
-        ws_valid.cell(row=row_idx, column=1, value=artifact['path']).border = thin_border
-        ws_valid.cell(row=row_idx, column=2, value=artifact.get('user', 'UNKNOWN')).border = thin_border
-        ws_valid.cell(row=row_idx, column=3, value=artifact['component_id']).border = thin_border
-
-        tis_link = artifact.get('tis_link', '')
-        tis_cell = ws_valid.cell(row=row_idx, column=4, value=tis_link)
-        if tis_link:
-            tis_cell.hyperlink = tis_link
-            tis_cell.style = "Hyperlink"
-        tis_cell.border = thin_border
-
-        for col in range(1, 5):
-            ws_valid.cell(row=row_idx, column=col).fill = valid_fill
-
-    for col_idx in range(1, 5):
-        ws_valid.column_dimensions[get_column_letter(col_idx)].width = 45
-
-    # ========== Sheet 6: Slow Components (Adaptive Depth) ==========
-    if component_depth_overrides:
-        ws_slow = wb.create_sheet("Slow Components")
-
-        slow_headers = ["Component ID", "Reduced Depth"]
-
-        for col_idx, header in enumerate(slow_headers, 1):
-            cell = ws_slow.cell(row=1, column=col_idx, value=header)
-            cell.font = header_font_white
-            cell.fill = header_fill
-            cell.border = thin_border
-
-        for row_idx, (comp_id, depth) in enumerate(component_depth_overrides.items(), 2):
-            ws_slow.cell(row=row_idx, column=1, value=comp_id).border = thin_border
-            ws_slow.cell(row=row_idx, column=2, value=depth).border = thin_border
-
-            for col in range(1, 3):
-                ws_slow.cell(row=row_idx, column=col).fill = info_fill
-
-        ws_slow.column_dimensions['A'].width = 20
-        ws_slow.column_dimensions['B'].width = 15
-
-    # Save workbook
-    wb.save(output_file)
-    logger.info(f"Excel report saved: {output_file}")
-
-    return str(output_file)
+# Note: generate_excel_report is imported from validation_excel_report module
 
 
 # =============================================================================
