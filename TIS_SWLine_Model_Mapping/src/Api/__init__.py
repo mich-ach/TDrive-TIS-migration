@@ -32,6 +32,8 @@ from config import (
     ADAPTIVE_TIMEOUT_THRESHOLD,
     MIN_CHILDREN_LEVEL,
     DEPTH_REDUCTION_STEP,
+    RETRY_BACKOFF_SECONDS,
+    FINAL_TIMEOUT_SECONDS,
     CONCURRENT_REQUESTS as DEFAULT_CONCURRENT_REQUESTS,
     CHILDREN_LEVEL as DEFAULT_CHILDREN_LEVEL,
 )
@@ -233,11 +235,14 @@ class TISClient:
         use_cache: bool = True
     ) -> Tuple[Optional[Dict], int]:
         """
-        Fetch component with adaptive depth reduction on timeouts.
+        Fetch component with adaptive depth and retry logic.
 
-        If the request times out or takes too long, automatically reduces
-        the children level and retries. Remembers components that need
-        lower depth for future calls.
+        Strategy:
+        1. If children_level is -1, use unlimited depth (no adaptive reduction)
+        2. Otherwise, try at current depth with adaptive timeout
+        3. If timeout, reduce depth and retry
+        4. At minimum depth, retry with exponential backoff
+        5. Final attempt with very long timeout
 
         Args:
             component_id: The TIS component ID (rId)
@@ -246,35 +251,61 @@ class TISClient:
         Returns:
             Tuple of (response_data, depth_used)
         """
-        # Check if we have a known depth override for this component
         current_depth = self._component_depth_overrides.get(component_id, self.children_level)
 
+        # Special case: -1 means try unlimited depth first, then fall back to iterative
+        if current_depth == -1 or self.children_level == -1:
+            # Check if we already have a fallback depth for this component
+            if component_id in self._component_depth_overrides and self._component_depth_overrides[component_id] > 0:
+                # Already fell back, use the stored depth and continue with normal logic
+                current_depth = self._component_depth_overrides[component_id]
+            else:
+                # First try unlimited depth with short timeout (fail fast to iterative)
+                url = f"{self.base_url}{component_id}?mappingType=TCI&childrenlevel=-1&attributes=true"
+                if self.debug_mode:
+                    logger.debug(f"API request (unlimited depth): {url}")
+
+                # Use short timeout for unlimited - fail fast if too slow
+                unlimited_timeout = (10, 30)  # 30 second read timeout max
+
+                data, timed_out, elapsed = self.get(url, timeout=unlimited_timeout)
+
+                if data is not None:
+                    if self.debug_mode:
+                        logger.debug(f"Unlimited depth succeeded: {len(data.get('children', []))} children")
+                    return data, -1
+
+                # Unlimited failed - fall back to iterative exploration starting at depth 1
+                logger.info(f"Unlimited depth timed out for {component_id}, switching to iterative exploration...")
+                self._component_depth_overrides[component_id] = 1
+                current_depth = 1
+
+        # Phase 1: Try reducing depth (normal adaptive logic)
         while current_depth >= MIN_CHILDREN_LEVEL:
             url = f"{self.base_url}{component_id}?mappingType=TCI&childrenlevel={current_depth}&attributes=true"
+            if self.debug_mode:
+                logger.debug(f"API request (depth={current_depth}): {url}")
 
             # Use adaptive timeout based on depth
-            adaptive_timeout = (5, ADAPTIVE_TIMEOUT_THRESHOLD + (current_depth * 2))
+            adaptive_timeout = (10, ADAPTIVE_TIMEOUT_THRESHOLD + (current_depth * 5))
 
             data, timed_out, elapsed = self.get(url, use_cache=use_cache, timeout=adaptive_timeout)
 
-            # Check if we got a response
             if data is not None:
-                # If this was slower than threshold but succeeded, remember for future
+                if self.debug_mode:
+                    logger.debug(f"API response: {len(data.get('children', []))} children")
+                # If slow but succeeded, remember for future
                 if elapsed > ADAPTIVE_TIMEOUT_THRESHOLD and current_depth > MIN_CHILDREN_LEVEL:
                     with self._lock:
-                        # Store slightly lower depth for next time
                         self._component_depth_overrides[component_id] = max(
                             MIN_CHILDREN_LEVEL,
                             current_depth - DEPTH_REDUCTION_STEP
                         )
                     if self.debug_mode:
-                        logger.debug(
-                            f"Slow component {component_id}: {elapsed:.1f}s at depth {current_depth}, "
-                            f"will use depth {self._component_depth_overrides[component_id]} next time"
-                        )
+                        logger.debug(f"Slow response: {component_id} took {elapsed:.1f}s at depth {current_depth}")
                 return data, current_depth
 
-            # If timed out or no response, reduce depth and retry
+            # If timed out, reduce depth and retry
             if timed_out or elapsed > ADAPTIVE_TIMEOUT_THRESHOLD:
                 with self._lock:
                     self.timeout_retries += 1
@@ -284,21 +315,48 @@ class TISClient:
                 if new_depth >= MIN_CHILDREN_LEVEL:
                     with self._lock:
                         self.depth_reductions += 1
-                    logger.warning(
-                        f"Timeout: reducing depth {current_depth} -> {new_depth} for component {component_id}"
-                    )
+                    logger.warning(f"Timeout: reducing depth {current_depth} -> {new_depth} for {component_id}")
 
-                    # Remember this component needs lower depth
                     self._component_depth_overrides[component_id] = new_depth
                     current_depth = new_depth
                 else:
-                    # Already at minimum depth, give up
-                    logger.error(f"Failed: component {component_id} timed out at minimum depth")
-                    return None, current_depth
+                    # At minimum depth, move to Phase 2
+                    break
             else:
-                # Some other error, don't retry
-                return None, current_depth
+                # Non-timeout error at this depth
+                current_depth -= 1
 
+        # Phase 2: Retry at minimum depth with exponential backoff
+        url = f"{self.base_url}{component_id}?mappingType=TCI&childrenlevel={MIN_CHILDREN_LEVEL}&attributes=true"
+
+        for retry_idx, backoff in enumerate(RETRY_BACKOFF_SECONDS):
+            logger.info(f"Retry {retry_idx + 1}/{len(RETRY_BACKOFF_SECONDS)}: waiting {backoff}s for {component_id}")
+            time.sleep(backoff)
+
+            # Increase timeout with each retry
+            retry_timeout = (10, 20 + (retry_idx * 10))
+            data, timed_out, elapsed = self.get(url, timeout=retry_timeout, use_cache=False)
+
+            if data is not None:
+                logger.info(f"Recovered: {component_id} succeeded after {retry_idx + 1} retries ({elapsed:.1f}s)")
+                self._component_depth_overrides[component_id] = MIN_CHILDREN_LEVEL
+                return data, MIN_CHILDREN_LEVEL
+
+            with self._lock:
+                self.timeout_retries += 1
+
+        # Phase 3: Final attempt with very long timeout
+        logger.info(f"Final attempt: {component_id} with {FINAL_TIMEOUT_SECONDS}s timeout")
+        final_timeout = (15, FINAL_TIMEOUT_SECONDS)
+        data, timed_out, elapsed = self.get(url, timeout=final_timeout, use_cache=False)
+
+        if data is not None:
+            logger.info(f"Recovered: {component_id} succeeded on final attempt ({elapsed:.1f}s)")
+            self._component_depth_overrides[component_id] = MIN_CHILDREN_LEVEL
+            return data, MIN_CHILDREN_LEVEL
+
+        # All attempts failed
+        logger.warning(f"Skipped: {component_id} failed after all retries")
         return None, MIN_CHILDREN_LEVEL
 
     def clear_cache(self) -> None:
