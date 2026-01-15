@@ -2,6 +2,21 @@
 
 This module defines dataclasses for structured data throughout the application,
 replacing the use of untyped dictionaries.
+
+Classes:
+    LifeCycleStatus: Enum for artifact lifecycle status values
+    DeviationType: Enum for path/naming deviation types
+    ArtifactInfo: TIS artifact with all metadata
+    SoftwareLine: Software line with its artifacts
+    Project: TIS project containing software lines
+    MappingEntry: Mapping between Excel software line and TIS data
+    ValidationResult: Result of artifact path/naming validation
+    ValidationReport: Aggregated validation report for multiple artifacts
+    ExtractionStatistics: Statistics from artifact extraction process
+    APIResponse: Wrapper for TIS API response data
+    RunContext: Context for a single execution run
+    ValidatedArtifact: Validated artifact with deviation tracking
+    Checkpoint: Checkpoint for resume capability in validation runs
 """
 
 from dataclasses import dataclass, field, asdict
@@ -241,7 +256,6 @@ class ValidationReport:
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
-        from dataclasses import asdict
         return asdict(self)
 
 

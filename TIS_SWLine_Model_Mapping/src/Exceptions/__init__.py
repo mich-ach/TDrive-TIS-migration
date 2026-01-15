@@ -2,6 +2,17 @@
 
 This module defines a hierarchy of exceptions for consistent error handling
 throughout the application.
+
+Classes:
+    TISError: Base exception for all TIS-related errors
+    TISAPIError: Exception for TIS API communication errors
+    TISTimeoutError: Exception for TIS API timeout errors
+    TISConnectionError: Exception for TIS API connection errors
+    ConfigurationError: Exception for configuration-related errors
+    DirectoryError: Exception for directory/file operation errors
+    ExcelError: Exception for Excel file operation errors
+    ValidationError: Exception for artifact validation errors
+    ParsingError: Exception for data parsing errors
 """
 
 

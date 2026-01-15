@@ -1,14 +1,20 @@
-"""Path validation logic for TIS artifacts.
+"""Path and naming validation for TIS artifacts.
 
-This module provides functions to validate artifact paths against
+This module provides classes and functions to validate artifact paths against
 expected conventions and naming patterns.
+
+Classes:
+    PathValidator: Validates artifact paths against expected conventions
+
+Functions:
+    validate_path_simple: Simple path validation without component-specific logic
 """
 
 import re
 import logging
 from typing import Tuple, List, Dict, Optional
 
-from models import DeviationType
+from Models import DeviationType
 
 from config import (
     PATH_CONVENTION_ENABLED,

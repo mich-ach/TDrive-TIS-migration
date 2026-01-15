@@ -25,13 +25,15 @@ import datetime
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
-import ujson
+try:
+    import ujson
+except ImportError:
+    import json as ujson
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from version_parser import VersionParser
-from datetime_utils import convert_ticks_to_iso, parse_ticks_to_datetime
-from artifact_filter import ArtifactFilter
+from Utils import VersionParser, convert_ticks_to_iso, parse_ticks_to_datetime
+from Filters import ArtifactFilter
 
 # Import config properly
 import config

@@ -27,16 +27,19 @@ from dataclasses import dataclass, field, asdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
-import ujson
+try:
+    import ujson
+except ImportError:
+    import json as ujson
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-# Import shared utilities and models
-from datetime_utils import parse_ticks_to_datetime
-from artifact_filter import ArtifactFilter
-from models import DeviationType, ValidationReport, ValidatedArtifact, Checkpoint
-from path_validator import validate_path_simple, CSP_SWB_PATTERN
-from validation_excel_report import generate_excel_report
+# Import shared utilities and models from packages
+from Utils import parse_ticks_to_datetime
+from Filters import ArtifactFilter
+from Models import DeviationType, ValidationReport, ValidatedArtifact, Checkpoint
+from Validators import validate_path_simple, CSP_SWB_PATTERN
+from Reports import generate_excel_report
 
 from config import (
     TIS_URL,

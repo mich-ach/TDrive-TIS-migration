@@ -2,6 +2,9 @@
 
 This module handles all HTTP communication with the TIS API,
 including connection pooling, caching, and retry mechanisms.
+
+Classes:
+    TISClient: HTTP client for TIS API with connection pooling, caching, and retry logic
 """
 
 import logging
@@ -10,7 +13,10 @@ import threading
 from typing import Dict, Optional, Tuple, Any
 
 import requests
-import ujson
+try:
+    import ujson as json
+except ImportError:
+    import json
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
@@ -146,7 +152,7 @@ class TISClient:
             )
             elapsed = time.time() - start_time
             response.raise_for_status()
-            data = ujson.loads(response.content)
+            data = json.loads(response.content)
 
             with self._lock:
                 self.api_calls_made += 1

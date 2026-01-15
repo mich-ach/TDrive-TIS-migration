@@ -31,10 +31,9 @@ import sys
 from pathlib import Path
 from typing import Optional, NoReturn
 
-from directory_handler import DirectoryHandler
+from Handlers import DirectoryHandler, ExcelHandler
 from tis_artifact_extractor import main as extract_artifacts
-from excel_handler import ExcelHandler
-from models import DeviationType, ValidationReport
+from Models import DeviationType, ValidationReport
 
 # Import settings from config
 from config import (
@@ -110,8 +109,8 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
     2. Naming convention: Based on patterns in config.json
     """
     try:
-        from validation_excel_report import generate_excel_report
-        from path_validator import PathValidator
+        from Reports import generate_excel_report
+        from Validators import PathValidator
     except ImportError as e:
         logger.warning(f"Could not import validation modules: {e}")
         return None

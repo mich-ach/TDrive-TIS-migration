@@ -2,6 +2,9 @@
 
 This module handles the generation of Excel reports from validation results,
 providing multiple sheets for different views of the data.
+
+Functions:
+    generate_excel_report: Generate an Excel report with multiple sheets for accountability
 """
 
 import datetime
@@ -9,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Dict, Optional
 
-from models import ValidationReport
+from Models import ValidationReport
 
 logger = logging.getLogger(__name__)
 
