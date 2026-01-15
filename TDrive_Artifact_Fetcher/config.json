@@ -1,0 +1,17 @@
+{
+    "input_dir": "input",
+    "output_dir": "output",
+    "max_workers": 8,
+    "log_level": "DEBUG",
+    "base_path": "//bosch.com/dfsrb/DfsDE/DIV/DGS/08/EC/20_CE/PJ/60_SRL_LCT/LC_TESTS/Projects/003/LCO_Projects",
+    "lco_versions": {
+        "545": {
+            "path": "LCOV5.4.5",
+            "sw_line": "SWB26.1"
+        },
+        "5411": {
+            "path": "LCOV5.4.11",
+            "sw_line": "SWB26.2"
+        }
+    }
+}
