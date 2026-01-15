@@ -68,7 +68,7 @@
         "component_name": ["vVeh_LCO"],
         "component_grp": "TIS Artifact Container",
         "life_cycle_status": ["released", "archived", "development"],
-        "skip_deleted": false
+        "skip_deleted": true
     },
 
     "naming_convention": {

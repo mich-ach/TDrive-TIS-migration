@@ -1,10 +1,20 @@
 """Excel file handling utilities for software line mapping."""
 import datetime
+import logging
+import re
+import traceback
 from typing import List, Optional, Tuple, Dict, Any
+
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 import json
+
+from config import TIS_LINK_TEMPLATE
+
+# Setup logger for this module
+logger = logging.getLogger(__name__)
+
 
 class ExcelHandler:
     """Handles Excel file operations for software line mapping."""
@@ -28,8 +38,8 @@ class ExcelHandler:
             wb = load_workbook(file_path, data_only=True, read_only=True)
             ws = wb[sheet_name] if sheet_name else wb.active
 
-            print("\nReading Excel file details:")
-            print(f"Active sheet: {ws.title}")
+            logger.info("Reading Excel file details:")
+            logger.info(f"Active sheet: {ws.title}")
 
             # Define the target columns
             target_columns = {
@@ -40,23 +50,23 @@ class ExcelHandler:
 
             # Find header row (assuming it's in row 2)
             header_row = list(ws.iter_rows(min_row=2, max_row=2, values_only=True))[0]
-            print(f"Found headers: {header_row}")  # Debug print
+            logger.debug(f"Found headers: {header_row}")
 
             # Find column indices
             for idx, cell_value in enumerate(header_row):
                 if cell_value:
                     cell_str = str(cell_value).strip()
-                    print(f"Checking header: '{cell_str}'")  # Debug print
+                    logger.debug(f"Checking header: '{cell_str}'")
                     for target_col in target_columns:
                         if cell_str.lower() == target_col.lower():
                             target_columns[target_col] = idx
-                            print(f"Found column '{target_col}' at index {idx}")  # Debug print
+                            logger.debug(f"Found column '{target_col}' at index {idx}")
                             break
 
-            # Print found column indices
-            print("\nFound column indices:")
+            # Log found column indices
+            logger.info("Found column indices:")
             for col, idx in target_columns.items():
-                print(f"{col}: {idx}")
+                logger.info(f"  {col}: {idx}")
 
             # Check if we found all required columns
             if target_columns["Project line"] is None:
@@ -67,7 +77,7 @@ class ExcelHandler:
             software_lines = []
             project_data = {}
 
-            print("\nReading data rows...")  # Debug print
+            logger.debug("Reading data rows...")
             row_count = 0
             for row in ws.iter_rows(min_row=3, values_only=True):
                 row_count += 1
@@ -89,25 +99,22 @@ class ExcelHandler:
                         "Project class": str(project_class).strip() if project_class else ""
                     }
 
-                    # Debug print every 100 rows
+                    # Debug log every 100 rows
                     if row_count % 100 == 0:
-                        print(f"Processed {row_count} rows...")
-                        print(f"Sample data for {project_line}:")
-                        print(project_data[project_line])
+                        logger.debug(f"Processed {row_count} rows...")
 
             wb.close()
 
-            print("\nData collection summary:")
-            print(f"Total rows processed: {row_count}")
-            print(f"Software lines found: {len(software_lines)}")
-            print(f"Project data entries: {len(project_data)}")
+            logger.info("Data collection summary:")
+            logger.info(f"  Total rows processed: {row_count}")
+            logger.info(f"  Software lines found: {len(software_lines)}")
+            logger.info(f"  Project data entries: {len(project_data)}")
 
-            # Print some sample data
-            print("\nSample project data (first 3 entries):")
-            for i, (key, value) in enumerate(list(project_data.items())[:3]):
-                print(f"{key}:")
-                print(f"  ECU - HW Variante: {value['ECU - HW Variante']}")
-                print(f"  Project class: {value['Project class']}")
+            # Log sample data at debug level
+            if project_data:
+                logger.debug("Sample project data (first 3 entries):")
+                for i, (key, value) in enumerate(list(project_data.items())[:3]):
+                    logger.debug(f"  {key}: {value}")
 
             result = {
                 'software_lines': software_lines,
@@ -117,9 +124,8 @@ class ExcelHandler:
             return result, None
 
         except Exception as e:
-            import traceback
-            print(f"Error reading Excel file: {str(e)}")
-            print(traceback.format_exc())
+            logger.error(f"Error reading Excel file: {str(e)}")
+            logger.debug(traceback.format_exc())
             return {}, f"Error reading Excel file: {str(e)}"
 
     def read_software_lines(self, file_path: str, sheet_name: Optional[str] = None) -> Tuple[List[str], Optional[str]]:
@@ -140,13 +146,13 @@ class ExcelHandler:
             wb = load_workbook(file_path, data_only=True, read_only=True)
             ws = wb[sheet_name] if sheet_name else wb.active
 
-            print("\nReading Excel file details:")
-            print(f"Active sheet: {ws.title}")
+            logger.info("Reading Excel file details:")
+            logger.info(f"Active sheet: {ws.title}")
 
             software_lines = []
             for row_idx, row in enumerate(ws.iter_rows(min_row=1, values_only=True), 1):
                 if row_idx == 1:  # Header row
-                    print(f"Headers found: {row}")
+                    logger.debug(f"Headers found: {row}")
                     continue
 
                 if row[0]:  # First column
@@ -156,11 +162,11 @@ class ExcelHandler:
 
             wb.close()
 
-            print(f"\nFound {len(software_lines)} software lines")
+            logger.info(f"Found {len(software_lines)} software lines")
             if software_lines:
-                print("First 5 software lines found:")
+                logger.debug("First 5 software lines found:")
                 for i, line in enumerate(software_lines[:5], 1):
-                    print(f"{i}. {line}")
+                    logger.debug(f"  {i}. {line}")
 
             return software_lines, None
 
@@ -200,7 +206,6 @@ class ExcelHandler:
             return ""
 
         # First, take everything before underscore or space or opening bracket
-        import re
         cleaned = re.split(r'[_\s\(\[\{]', sw_line)[0]
 
         # Remove special characters
@@ -213,12 +218,12 @@ class ExcelHandler:
         """
         Create mapping between software lines and latest artifacts JSON data with flexible matching.
         """
-        # Print some debug info about master data
-        print("\nMaster data info:")
-        print(f"Total entries in master data: {len(master_data)}")
-        print("Sample master data entries:")
+        # Log debug info about master data
+        logger.info("Master data info:")
+        logger.info(f"  Total entries in master data: {len(master_data)}")
+        logger.debug("Sample master data entries:")
         for key in list(master_data.keys())[:3]:
-            print(f"{key}: {master_data[key]}")
+            logger.debug(f"  {key}: {master_data[key]}")
 
         mapping = {}
 
@@ -234,11 +239,13 @@ class ExcelHandler:
                         'project_data': project_data
                     }
 
-        # Print lookup table for debugging
-        print("\nLookup table examples:")
-        for original, cleaned in list([(k, self.clean_software_line(k))
-                                       for k in list(json_data.items())[0][1].get('software_lines', {}).keys()])[:10]:
-            print(f"Original: {original} -> Cleaned: {cleaned}")
+        # Log lookup table for debugging
+        if json_data:
+            first_project = list(json_data.items())[0][1]
+            sw_lines_sample = list(first_project.get('software_lines', {}).keys())[:10]
+            logger.debug("Lookup table examples:")
+            for original in sw_lines_sample:
+                logger.debug(f"  Original: {original} -> Cleaned: {self.clean_software_line(original)}")
 
         for sw_line in software_lines:
             # Get master data for this software line
@@ -276,21 +283,21 @@ class ExcelHandler:
                     'matched_with': original_key
                 })
 
-        # Print matching statistics and examples
+        # Log matching statistics
         matches = sum(1 for m in mapping.values() if m['found'])
-        print(f"\nMatching Statistics:")
-        print(f"Total software lines: {len(software_lines)}")
-        print(f"Found matches: {matches}")
-        print(f"Missing matches: {len(software_lines) - matches}")
+        logger.info("Matching Statistics:")
+        logger.info(f"  Total software lines: {len(software_lines)}")
+        logger.info(f"  Found matches: {matches}")
+        logger.info(f"  Missing matches: {len(software_lines) - matches}")
 
-        # Print examples of matches
-        print("\nExample matches:")
+        # Log examples of matches at debug level
         matched_examples = [(sw_line, data['matched_with'])
                             for sw_line, data in mapping.items()
                             if data['found'] and sw_line != data['matched_with']][:5]
-        for original, matched in matched_examples:
-            print(f"Original: '{original}' -> Matched with: '{matched}'")
-            print(f"Cleaned versions: '{self.clean_software_line(original)}' = '{self.clean_software_line(matched)}'")
+        if matched_examples:
+            logger.debug("Example matches (original -> matched):")
+            for original, matched in matched_examples:
+                logger.debug(f"  '{original}' -> '{matched}'")
 
         return mapping
 
@@ -334,7 +341,7 @@ class ExcelHandler:
 
             # Write explanation section
             current_row = 1
-            max_width = max(len(text) for text in explanation_rows)  # Calculate maximum width needed
+            max_width = max(len(text) for text in explanation_rows)
 
             for text in explanation_rows:
                 cell = ws.cell(row=current_row, column=1, value=text)
@@ -345,9 +352,8 @@ class ExcelHandler:
                 elif text.endswith(":"):  # Section headers
                     cell.font = Font(bold=True)
 
-                # Don't merge cells, just set the column width
-                if current_row == 1:  # Only need to set width once
-                    ws.column_dimensions['A'].width = max(max_width * 1.1, 12)  # Add 10% for padding
+                if current_row == 1:
+                    ws.column_dimensions['A'].width = max(max_width * 1.1, 12)
 
                 current_row += 1
 
@@ -356,8 +362,6 @@ class ExcelHandler:
             cell = ws.cell(row=separator_row, column=1)
             cell.border = Border(bottom=Side(style='double'))
             current_row += 2
-
-
 
             # Define headers in correct order
             master_data_headers = [
@@ -432,7 +436,7 @@ class ExcelHandler:
                 ws.cell(row=current_row, column=2, value=master_data.get("ECU - HW Variante", ""))
                 ws.cell(row=current_row, column=3, value=master_data.get("Project class", ""))
 
-                # Add borders to master data cells (white background)
+                # Add borders to master data cells
                 for col in range(1, len(master_data_headers) + 1):
                     cell = ws.cell(row=current_row, column=col)
                     cell.border = Border(
@@ -451,13 +455,13 @@ class ExcelHandler:
                     bottom=Side(style='thin')
                 )
                 if not data['found']:
-                    tis_cell.fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")  # Grey
+                    tis_cell.fill = PatternFill(start_color="D9D9D9", end_color="D9D9D9", fill_type="solid")
 
                 # Write artifact data
                 col = artifact_start_col
                 latest_artifact = data.get('latest_artifact', {})
                 artifact_found = latest_artifact is not None and bool(latest_artifact)
-                fill_color = "E8F5E8" if artifact_found else "FFE6E6"  # Green if artifact found, red if not
+                fill_color = "E8F5E8" if artifact_found else "FFE6E6"
 
                 # Basic artifact information
                 ws.cell(row=current_row, column=col, value="Yes" if artifact_found else "No")
@@ -478,7 +482,7 @@ class ExcelHandler:
 
                     # Add TIS link using artifact_rid
                     if artifact_rid:
-                        tis_link = f"https://rb-ps-tis-dashboard.bosch.com/?gotoCompInstanceId={artifact_rid}"
+                        tis_link = TIS_LINK_TEMPLATE.format(artifact_rid)
                         tis_cell = ws.cell(row=current_row, column=col + 12, value=tis_link)
                         tis_cell.hyperlink = tis_link
                         tis_cell.style = "Hyperlink"
@@ -501,29 +505,27 @@ class ExcelHandler:
                 max_length = 0
                 column_letter = get_column_letter(col_idx)
 
-                # Only check cells after the explanation section
                 for row in range(header_row, ws.max_row + 1):
                     cell = ws.cell(row=row, column=col_idx)
                     try:
                         if cell.value:
                             max_length = max(max_length, len(str(cell.value)))
-                    except:
+                    except Exception:
                         pass
 
                 adjusted_width = max(min(max_length + 2, 70), 12)
                 ws.column_dimensions[column_letter].width = adjusted_width
 
-            # Add filter and freeze panes for data section only
+            # Add filter for data section
             ws.auto_filter.ref = f"A{header_row}:{get_column_letter(len(master_data_headers) + len(artifact_headers) + 1)}{ws.max_row}"
-
-            # Freeze only the data headers row
-            #ws.freeze_panes = ws.cell(row=header_row + 1, column=1)  # Freeze the row after headers
 
             # Save workbook
             wb.save(output_file)
+            logger.info(f"Report saved successfully: {output_file}")
             return True, None
 
         except Exception as e:
+            logger.error(f"Error generating report: {str(e)}")
             return False, f"Error generating report: {str(e)}"
 
     def get_column_values_by_header(self, file_path: str, header_value: str, sheet_name: Optional[str] = None) -> Tuple[
@@ -543,19 +545,18 @@ class ExcelHandler:
             wb = load_workbook(file_path, data_only=True, read_only=True)
             ws = wb[sheet_name] if sheet_name else wb.active
 
-            print(f"\nReading from sheet: {ws.title}")
+            logger.debug(f"Reading from sheet: {ws.title}")
 
             # Find the column with the matching header
             header_row = next(ws.iter_rows(min_row=2, max_row=3, values_only=True))
             column_index = None
 
-            print(f"Looking for header: {header_value}")
-            print(f"Header row: {header_row}")
+            logger.debug(f"Looking for header: {header_value}")
 
             for idx, cell_value in enumerate(header_row):
                 if cell_value and str(cell_value).strip().lower() == header_value.lower():
                     column_index = idx
-                    print(f"Found header at column index: {idx}")
+                    logger.debug(f"Found header at column index: {idx}")
                     break
 
             if column_index is None:
@@ -564,7 +565,7 @@ class ExcelHandler:
 
             # Read data from the identified column
             data = []
-            for row in ws.iter_rows(min_row=2,  # Start from row 2 to skip header
+            for row in ws.iter_rows(min_row=2,
                                     min_col=column_index + 1,
                                     max_col=column_index + 1,
                                     values_only=True):
@@ -575,19 +576,23 @@ class ExcelHandler:
 
             wb.close()
 
-            print(f"\nFound {len(data)} values")
+            logger.info(f"Found {len(data)} values")
             if data:
-                print("First 5 values:")
+                logger.debug("First 5 values:")
                 for i, value in enumerate(data[:5], 1):
-                    print(f"{i}. {value}")
+                    logger.debug(f"  {i}. {value}")
 
             return data, None
 
         except Exception as e:
             return [], f"Error reading Excel file: {str(e)}"
 
+
 def main():
     """Example usage of ExcelHandler with latest_vveh_lco_artifacts data."""
+    # Configure logging for standalone execution
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
     excel_handler = ExcelHandler()
 
     # Paths
@@ -595,39 +600,40 @@ def main():
     latest_artifacts_file = r"C:\Users\ACM1WI\Documents\TIS_SWLine_Version_extractor_main\scripts\latest_vveh_lco_artifacts_20250807-193425.json"
     output_file = f"software_line_mapping_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
 
-    print("\nStep 1: Reading Excel file")
-    print(f"Reading from: {excel_file}")
+    logger.info("Step 1: Reading Excel file")
+    logger.info(f"Reading from: {excel_file}")
 
     # Get comprehensive Excel data
     excel_data, error = excel_handler.get_excel_data(excel_file)
     if error:
-        print(f"Error reading Excel file: {error}")
+        logger.error(f"Error reading Excel file: {error}")
         return
 
     software_lines = excel_data['software_lines']
     project_data = excel_data['project_data']
 
-    print(f"\nStep 2: Reading JSON file")
-    print(f"Reading from: {latest_artifacts_file}")
+    logger.info("Step 2: Reading JSON file")
+    logger.info(f"Reading from: {latest_artifacts_file}")
     try:
         with open(latest_artifacts_file, 'r', encoding='utf-8') as f:
             json_data = json.load(f)
-            print(f"Successfully loaded JSON data")
-            print(f"Number of projects in JSON: {len(json_data)}")
+            logger.info(f"Successfully loaded JSON data")
+            logger.info(f"Number of projects in JSON: {len(json_data)}")
     except Exception as e:
-        print(f"Error reading latest artifacts file: {e}")
+        logger.error(f"Error reading latest artifacts file: {e}")
         return
 
-    print("\nStep 3: Creating mapping")
+    logger.info("Step 3: Creating mapping")
     mapping = excel_handler.create_mapping(software_lines, json_data, project_data)
 
-    print("\nStep 4: Generating report")
+    logger.info("Step 4: Generating report")
     success, error = excel_handler.generate_report(mapping, output_file)
     if not success:
-        print(f"Error generating report: {error}")
+        logger.error(f"Error generating report: {error}")
         return
 
-    print(f"\nReport generated successfully: {output_file}")
+    logger.info(f"Report generated successfully: {output_file}")
+
 
 if __name__ == "__main__":
     main()

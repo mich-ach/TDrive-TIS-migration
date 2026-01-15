@@ -2,9 +2,13 @@
 
 import re
 import json
+import logging
 from typing import List, Dict, Any, Optional, Union
 
 from config import VEMOX_SVN_PATTERN, VEMOX_CONAN_PATTERN, VEMOX_SEARCH_PATH
+
+# Setup logger for this module
+logger = logging.getLogger(__name__)
 
 
 class VersionParser:
@@ -12,58 +16,55 @@ class VersionParser:
 
     def find_vemox_versions(self, data: Union[str, List, Dict], path_value: str = VEMOX_SEARCH_PATH) -> List[str]:
         """Find VeMox versions in externals where path contains path_value."""
-       # print(f"\n=== Starting VeMox Version Search ===")
-       # print(f"Input data: {json.dumps(data, indent=2)}")
+        logger.debug(f"Starting VeMox version search with path_value: {path_value}")
 
         try:
             # Handle JSON string input
             if isinstance(data, str):
                 try:
                     data = json.loads(data)
-                    #print("Successfully parsed JSON string")
+                    logger.debug("Successfully parsed JSON string")
                 except json.JSONDecodeError as e:
-                   # print(f"Error parsing JSON: {e}")
-                    #print("Raw string data:", data)
+                    logger.debug(f"Error parsing JSON: {e}")
                     return []
 
             # Handle both list and single item inputs
             if isinstance(data, dict):
                 data = [data]
             elif not isinstance(data, list):
-                #print(f"Unexpected data type: {type(data)}")
+                logger.debug(f"Unexpected data type: {type(data)}")
                 return []
 
             versions = set()
             for item in data:
                 if not isinstance(item, dict):
-                   # print(f"Skipping non-dict item: {item}")
+                    logger.debug(f"Skipping non-dict item: {item}")
                     continue
 
                 source_type = item.get('type', '').upper()
-               # print(f"\nProcessing source type: {source_type}")
+                logger.debug(f"Processing source type: {source_type}")
 
                 if source_type == "SVN":
                     svn_versions = self._find_svn_versions(item, path_value)
-                   # print(f"Found SVN versions: {svn_versions}")
+                    logger.debug(f"Found SVN versions: {svn_versions}")
                     versions.update(svn_versions)
                 elif source_type == "CONAN":
                     conan_version = self._find_conan_version(item)
-                    #print(f"Found CONAN version: {conan_version}")
+                    logger.debug(f"Found CONAN version: {conan_version}")
                     if conan_version:
                         versions.add(conan_version)
 
-            #print(f"\nFinal versions found: {sorted(list(versions))}")
-            #print("=== VeMox Version Search Complete ===\n")
-            return sorted(list(versions))
+            result = sorted(list(versions))
+            logger.debug(f"Final versions found: {result}")
+            return result
 
         except Exception as e:
-           # print(f"Error processing versions: {e}")
-           # print("=== VeMox Version Search Failed ===\n")
+            logger.error(f"Error processing versions: {e}")
             return []
 
     def _find_svn_versions(self, item: Dict[str, Any], path_value: str) -> List[str]:
         """Extract VeMox versions from SVN externals."""
-       # print(f"\n--- Processing SVN externals ---")
+        logger.debug("Processing SVN externals")
         versions = set()
         try:
             externals = item.get('externals', [])
@@ -80,18 +81,15 @@ class VersionParser:
 
                         # Check if path ends with the normalized path_value
                         if normalized_path.endswith(normalized_path_value):
-
                             vemox_part = self._extract_vemox_from_svn_url(url)
                             if vemox_part:
                                 versions.add(vemox_part)
                             else:
-                                print("No VeMox version found in URL")
-                        else:
-                            continue
+                                logger.debug("No VeMox version found in URL")
 
                 return sorted(list(versions))
         except Exception as e:
-            #print(f"Error extracting SVN versions: {e}")
+            logger.error(f"Error extracting SVN versions: {e}")
             return []
 
     def _find_conan_version(self, item: Dict[str, Any]) -> Optional[str]:
@@ -108,12 +106,12 @@ class VersionParser:
                     return version
             return None
         except Exception as e:
-            #print(f"Error extracting CONAN version: {e}")
+            logger.error(f"Error extracting CONAN version: {e}")
             return None
 
     def _extract_vemox_from_svn_url(self, url: str) -> Optional[str]:
         """Extract VeMox version from SVN URL."""
-        #print(f"\nExtracting VeMox from URL: {url}")
+        logger.debug(f"Extracting VeMox from URL: {url}")
         try:
             url_parts = url.split("/")
             for part in url_parts:
@@ -126,19 +124,19 @@ class VersionParser:
                 if version_match:
                     groups = version_match.groups()
                     version = f"VeMox{groups[0]}{groups[1]}{groups[2]}R{groups[3]}{groups[4]}"
-                    #print(f"Found version: {version}")
+                    logger.debug(f"Found version: {version}")
                     return version
 
                 # Check general VeMox pattern
                 if re.match(VEMOX_SVN_PATTERN, part, re.IGNORECASE):
                     version = self._format_vemox_version(part)
-                    #print(f"Found version using general pattern: {version}")
+                    logger.debug(f"Found version using general pattern: {version}")
                     return version
 
-            #print("No VeMox version found in URL")
+            logger.debug("No VeMox version found in URL")
             return None
         except Exception as e:
-           # print(f"Error extracting SVN version: {e}")
+            logger.error(f"Error extracting SVN version: {e}")
             return None
 
     def _extract_vemox_from_conan_package(self, package: str) -> Optional[str]:
@@ -150,7 +148,7 @@ class VersionParser:
                 return self._format_vemox_version(version)
             return None
         except Exception as e:
-            #print(f"Error extracting CONAN version: {e}")
+            logger.error(f"Error extracting CONAN version: {e}")
             return None
 
     def _format_vemox_version(self, version: str) -> str:
@@ -173,5 +171,5 @@ class VersionParser:
 
             return version
         except Exception as e:
-            print(f"Error formatting version {version}: {e}")
+            logger.error(f"Error formatting version {version}: {e}")
             return version
