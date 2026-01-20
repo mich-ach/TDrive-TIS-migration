@@ -147,12 +147,9 @@ def run_extraction_workflow(open_gui: bool = False) -> bool:
         traceback.print_exc()
         return False
 
-def resolve_excel_path(file_path: str) -> Path:
-    """
-    Resolve Excel file path. Handles both absolute and relative paths.
-    Relative paths are resolved from the script directory.
-    """
-    path = Path(file_path)
+def main():
+    """Main entry point."""
+    open_gui = "--gui" in sys.argv
 
     if "--help" in sys.argv or "-h" in sys.argv:
         print(__doc__)
