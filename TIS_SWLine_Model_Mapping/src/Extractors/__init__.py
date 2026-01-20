@@ -243,7 +243,7 @@ class ArtifactExtractor:
             'component_type': actual_component_name,
             'component_type_category': actual_component_type,
             'component_grp': actual_component_grp,
-            'simulation_type': 'HiL',
+            'simulation_type': self._extract_simulation_type(component_path),
             'software_type': self._extract_software_type(component_path),
             'labcar_type': self._extract_labcar_type(component_path),
             'user': None,
@@ -326,6 +326,17 @@ class ArtifactExtractor:
         for part in path_parts:
             if part in LABCAR_PLATFORMS:
                 return part
+        return None
+
+    def _extract_simulation_type(self, path: str) -> Optional[str]:
+        """Extract simulation type (HiL/SiL) from path."""
+        if not path:
+            return None
+        path_parts = path.split('/')
+        if 'HiL' in path_parts:
+            return 'HiL'
+        if 'SiL' in path_parts:
+            return 'SiL'
         return None
 
     def _extract_lco_version(self, execution_value: Any) -> Optional[str]:
