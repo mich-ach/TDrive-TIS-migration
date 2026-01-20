@@ -1,11 +1,17 @@
 {
     "_comment": "vVeh_LCO Software Line Mapping Configuration",
 
+    "paths": {
+        "_comment": "Input: place Excel master file and JSON from TIS_Artifact_Fetcher here. Output: generated reports.",
+        "input_dir": "../input",
+        "output_dir": "../output",
+        "excel_file": "Masterdata-XCU.xlsx",
+        "artifacts_json": "vveh_lco_artifacts_*.json"
+    },
+
     "workflow": {
-        "default_excel_file": "../Masterdata-XCU.xlsx",
         "auto_open_report": false,
-        "generate_validation_report": false,
-        "tis_extractor_path": "../TIS_SWLine_Model_Mapping"
+        "generate_validation_report": false
     },
 
     "output": {
