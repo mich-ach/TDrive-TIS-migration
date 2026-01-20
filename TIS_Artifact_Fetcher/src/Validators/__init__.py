@@ -225,17 +225,23 @@ class PathValidator:
         # Find position of variable in structure (after last required folder before it)
         for i, part in enumerate(structure_parts):
             if part == f'{{{var_name}}}':
-                # Find the folder before this variable in structure
+                # Find the folder before this variable in structure and count intermediate variables
                 prev_folder = None
+                steps_after_anchor = 1  # Start at 1 (next item after anchor)
                 for j in range(i - 1, -1, -1):
-                    if not structure_parts[j].startswith('{') and structure_parts[j] != '...':
-                        prev_folder = structure_parts[j]
+                    struct_part = structure_parts[j]
+                    if not struct_part.startswith('{') and struct_part != '...':
+                        prev_folder = struct_part
                         break
+                    elif struct_part.startswith('{') and struct_part.endswith('}'):
+                        # Count intermediate variables to skip
+                        steps_after_anchor += 1
 
                 if prev_folder and prev_folder in path_parts:
                     prev_index = path_parts.index(prev_folder)
-                    if prev_index + 1 < len(path_parts):
-                        return path_parts[prev_index + 1]
+                    target_index = prev_index + steps_after_anchor
+                    if target_index < len(path_parts):
+                        return path_parts[target_index]
         return None
 
     def _validate_hil_path(

@@ -68,14 +68,14 @@
         "enabled": true,
         "patterns": {
             "vVeh_LCO": {
-                "description": "vVeh_LCO artifact: [timestamp -] VW MDL[_suffix] : <Project> / <Subversion> [; <id>]",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_[A-Za-z0-9]+)?\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\s;]+)(?:\\s*;\\s*(?P<id>\\d+))?$",
-                "example": "VW MDL : ProjectSubversion / Subversion ; 220324 or VW MDL_HIL : Project / Sub"
+                "description": "vVeh_LCO artifact: [timestamp -] [date] VW MDL[_suffix] : <Project> / <Subversion> [; <id>]",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?(?:[\\d\\-]+\\s+)?VW\\s+MDL(?:_[A-Za-z0-9]+)?\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\s;]+)(?:\\s*;\\s*(?P<id>\\d+))?$",
+                "example": "VW MDL : Project / Sub ; 220324 or 2022-01-26T19:12:11Z - 2022-01-26 VW MDL_HIL : Project / Sub"
             },
             "test_ECU-TEST": {
-                "description": "test_ECU-TEST artifact: [timestamp -] VW TST[_suffix] : <TestName> [; <id>]",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+TST(?:_[A-Za-z0-9]+)?\\s*:\\s*(?P<testname>.+?)(?:\\s*;\\s*(?P<id>[a-zA-Z0-9]+))?$",
-                "example": "VW TST : Project1234/ P69 [TestName] ; 132019 or VW TST_HIL : TestName"
+                "description": "test_ECU-TEST artifact: [timestamp -] [date] VW TST[_suffix] : <TestName> [; <id>]",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?(?:[\\d\\-]+\\s+)?VW\\s+TST(?:_[A-Za-z0-9]+)?\\s*:\\s*(?P<testname>.+?)(?:\\s*;\\s*(?P<id>[a-zA-Z0-9]+))?$",
+                "example": "VW TST : TestName ; 132019 or 2022-01-26T19:12:11Z - 2022-01-26 VW TST_SiL : TestVersion"
             }
         }
     },
@@ -84,7 +84,8 @@
         "_comment": "Expected path structure by component_name. Variables in {brackets} can have allowed values defined. Use _contains suffix for partial matching.",
         "enabled": true,
         "vVeh_LCO": {
-            "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/{CSP_SWB}/{LabcarType}/.../{artifact}",
+            "expected_structure": "{Project}/{SoftwareLine}/Model/{SimulationType}/vVeh/{CSP_SWB}/{LabcarType}/.../{artifact}",
+            "SimulationType": ["HiL"],
             "CSP_SWB_contains": ["CSP", "SWB"],
             "LabcarType": ["VME", "PCIe"]
         },
