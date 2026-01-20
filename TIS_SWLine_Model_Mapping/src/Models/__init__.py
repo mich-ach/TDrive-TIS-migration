@@ -71,6 +71,8 @@ class ArtifactInfo:
     software_type: Optional[str] = None
     labcar_type: Optional[str] = None
     test_type: Optional[str] = None
+    test_type_path: Optional[str] = None
+    test_type_mismatch: bool = False
     user: Optional[str] = None
     lco_version: Optional[str] = None
     vemox_version: Optional[str] = None
@@ -95,6 +97,8 @@ class ArtifactInfo:
             'software_type': self.software_type,
             'labcar_type': self.labcar_type,
             'test_type': self.test_type,
+            'test_type_path': self.test_type_path,
+            'test_type_mismatch': self.test_type_mismatch,
             'user': self.user,
             'lco_version': self.lco_version,
             'vemox_version': self.vemox_version,
@@ -121,6 +125,8 @@ class ArtifactInfo:
             software_type=data.get('software_type'),
             labcar_type=data.get('labcar_type'),
             test_type=data.get('test_type'),
+            test_type_path=data.get('test_type_path'),
+            test_type_mismatch=data.get('test_type_mismatch', False),
             user=data.get('user'),
             lco_version=data.get('lco_version'),
             vemox_version=data.get('vemox_version'),

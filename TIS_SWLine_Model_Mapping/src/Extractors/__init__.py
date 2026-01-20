@@ -246,7 +246,9 @@ class ArtifactExtractor:
             'simulation_type': self._extract_simulation_type(component_path),
             'software_type': self._extract_software_type(component_path),
             'labcar_type': self._extract_labcar_type(component_path),
-            'test_type': self._extract_test_type_from_path(component_path),
+            'test_type': None,  # Will be set from attribute
+            'test_type_path': self._extract_test_type_from_path(component_path),  # For validation
+            'test_type_mismatch': False,  # Validation flag
             'user': None,
             'lco_version': None,
             'vemox_version': None,
@@ -290,8 +292,12 @@ class ArtifactExtractor:
             elif name == 'sources' and value:
                 condensed['vemox_version'] = self._extract_vemox_version(value, version_parser)
             elif name == 'testType':
-                # Prefer attribute value over path-based extraction
                 condensed['test_type'] = value
+                # Validate: check if testType matches the path Test/{TestType}
+                path_test_type = condensed['test_type_path']
+                if path_test_type and value and path_test_type != value:
+                    condensed['test_type_mismatch'] = True
+                    logger.warning(f"Test type mismatch: attribute='{value}' vs path='{path_test_type}'")
 
         return {
             'name': component_data.get('name', 'Unknown'),
@@ -303,6 +309,8 @@ class ArtifactExtractor:
             'software_type': condensed['software_type'],
             'labcar_type': condensed['labcar_type'],
             'test_type': condensed['test_type'],
+            'test_type_path': condensed['test_type_path'],
+            'test_type_mismatch': condensed['test_type_mismatch'],
             'user': condensed['user'],
             'lco_version': condensed['lco_version'],
             'vemox_version': condensed['vemox_version'],

@@ -68,9 +68,6 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         self.sort_column: int = -1  # -1 = no sort
         self.sort_ascending: bool = True
 
-        # Track visible columns (non-empty ones)
-        self.visible_columns: List[int] = list(range(len(self.columns)))
-
         # Column definitions: (key, header, min_width, weight, data_key)
         # weight determines how much of extra space the column gets
         # data_key is the artifact dict key to use for this column
@@ -86,6 +83,8 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             ("software_type", "Software Type", 60, 0, "software_type"),
             ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
             ("test_type", "Test Type", 60, 0, "test_type"),
+            ("test_type_path", "Test Type (Path)", 60, 0, "test_type_path"),
+            ("test_type_mismatch", "Test Type Mismatch", 55, 0, "test_type_mismatch"),
             ("user", "User", 70, 0, "user"),
             ("lco_version", "LCO Version", 80, 1, "lco_version"),
             ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
@@ -97,6 +96,9 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             ("build_type", "Build Type", 60, 0, "build_type"),
             ("upload_path", "Upload Path", 200, 3, "upload_path"),
         ]
+
+        # Track visible columns (non-empty ones) - must be after self.columns is defined
+        self.visible_columns: List[int] = list(range(len(self.columns)))
 
         self._create_ui()
 

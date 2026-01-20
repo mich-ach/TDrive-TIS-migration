@@ -10,7 +10,7 @@ Functions:
 import datetime
 import logging
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 
 from Models import ValidationReport
 
@@ -75,6 +75,8 @@ def generate_excel_report(
                              deviation_fill, warning_fill, get_column_letter)
     _create_by_user_sheet(wb, report, header_font_white, header_fill, thin_border, Alignment)
     _create_by_project_sheet(wb, report, header_font_white, header_fill, thin_border, get_column_letter)
+    _create_by_component_type_sheet(wb, report, header_font_white, header_fill, thin_border,
+                                    deviation_fill, warning_fill, get_column_letter, Alignment)
     _create_valid_artifacts_sheet(wb, report, header_font_white, thin_border, valid_fill,
                                   PatternFill, get_column_letter)
 
@@ -282,6 +284,110 @@ def _create_by_project_sheet(wb, report, header_font_white, header_fill, thin_bo
 
     for col_idx in range(1, 5):
         ws_by_project.column_dimensions[get_column_letter(col_idx)].width = 35
+
+
+def _create_by_component_type_sheet(wb, report, header_font_white, header_fill, thin_border,
+                                    deviation_fill, warning_fill, get_column_letter, Alignment):
+    """Create sheets split by Component Type (component_name)."""
+    # First, group all deviations by component type
+    deviations_by_component: Dict[str, list] = {}
+    valid_by_component: Dict[str, list] = {}
+
+    for dev in report.deviations:
+        component_type = dev.get('component_type', 'Unknown')
+        if component_type not in deviations_by_component:
+            deviations_by_component[component_type] = []
+        deviations_by_component[component_type].append(dev)
+
+    for valid in report.valid_paths:
+        component_type = valid.get('component_type', 'Unknown')
+        if component_type not in valid_by_component:
+            valid_by_component[component_type] = []
+        valid_by_component[component_type].append(valid)
+
+    # Create a summary sheet for component types
+    ws_comp_summary = wb.create_sheet("By Component Type")
+
+    summary_headers = ["Component Type", "Total Artifacts", "Valid", "Deviations", "Users"]
+
+    for col_idx, header in enumerate(summary_headers, 1):
+        cell = ws_comp_summary.cell(row=1, column=col_idx, value=header)
+        cell.font = header_font_white
+        cell.fill = header_fill
+        cell.border = thin_border
+
+    # Get all unique component types
+    all_component_types = set(deviations_by_component.keys()) | set(valid_by_component.keys())
+
+    row_idx = 2
+    for comp_type in sorted(all_component_types):
+        devs = deviations_by_component.get(comp_type, [])
+        valids = valid_by_component.get(comp_type, [])
+        total = len(devs) + len(valids)
+        users = set()
+        for d in devs:
+            users.add(d.get('user', 'UNKNOWN'))
+        for v in valids:
+            users.add(v.get('user', 'UNKNOWN'))
+
+        ws_comp_summary.cell(row=row_idx, column=1, value=comp_type).border = thin_border
+        ws_comp_summary.cell(row=row_idx, column=2, value=total).border = thin_border
+        ws_comp_summary.cell(row=row_idx, column=3, value=len(valids)).border = thin_border
+        ws_comp_summary.cell(row=row_idx, column=4, value=len(devs)).border = thin_border
+        ws_comp_summary.cell(row=row_idx, column=5, value=", ".join(sorted(users)[:5])).border = thin_border
+
+        row_idx += 1
+
+    ws_comp_summary.column_dimensions['A'].width = 25
+    ws_comp_summary.column_dimensions['B'].width = 15
+    ws_comp_summary.column_dimensions['C'].width = 10
+    ws_comp_summary.column_dimensions['D'].width = 12
+    ws_comp_summary.column_dimensions['E'].width = 40
+
+    # Create individual sheets for each component type with deviations
+    for comp_type in sorted(deviations_by_component.keys()):
+        devs = deviations_by_component[comp_type]
+        if not devs:
+            continue
+
+        # Clean sheet name (Excel has 31 char limit and special char restrictions)
+        sheet_name = f"Dev-{comp_type}"[:31].replace('/', '-').replace('\\', '-').replace('*', '').replace('?', '').replace('[', '').replace(']', '')
+
+        ws_comp = wb.create_sheet(sheet_name)
+
+        comp_headers = [
+            "Path", "Deviation Type", "Uploader", "Details",
+            "Expected Path", "Component ID", "TIS Link"
+        ]
+
+        for col_idx, header in enumerate(comp_headers, 1):
+            cell = ws_comp.cell(row=1, column=col_idx, value=header)
+            cell.font = header_font_white
+            cell.fill = header_fill
+            cell.border = thin_border
+
+        for row_idx, dev in enumerate(devs, 2):
+            ws_comp.cell(row=row_idx, column=1, value=dev['path']).border = thin_border
+            ws_comp.cell(row=row_idx, column=2, value=dev['deviation_type']).border = thin_border
+            ws_comp.cell(row=row_idx, column=3, value=dev.get('user', 'UNKNOWN')).border = thin_border
+            ws_comp.cell(row=row_idx, column=4, value=dev.get('deviation_details', '')).border = thin_border
+            ws_comp.cell(row=row_idx, column=5, value=dev.get('expected_path_hint', '')).border = thin_border
+            ws_comp.cell(row=row_idx, column=6, value=dev['component_id']).border = thin_border
+
+            tis_link = dev.get('tis_link', '')
+            tis_cell = ws_comp.cell(row=row_idx, column=7, value=tis_link)
+            if tis_link:
+                tis_cell.hyperlink = tis_link
+                tis_cell.style = "Hyperlink"
+            tis_cell.border = thin_border
+
+            # Color by deviation type
+            fill = warning_fill if dev['deviation_type'] == 'CSP_SWB_UNDER_MODEL' else deviation_fill
+            for col in range(1, 8):
+                ws_comp.cell(row=row_idx, column=col).fill = fill
+
+        for col_idx in range(1, len(comp_headers) + 1):
+            ws_comp.column_dimensions[get_column_letter(col_idx)].width = 30
 
 
 def _create_valid_artifacts_sheet(wb, report, header_font_white, thin_border, valid_fill,
