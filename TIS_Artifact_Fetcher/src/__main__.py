@@ -38,10 +38,7 @@ from typing import Optional
 from Fetchers import run_extraction as fetch_artifacts
 
 import config
-from config import (
-    LOG_LEVEL,
-    OPEN_ARTIFACT_VIEWER,
-)
+from config import LOG_LEVEL
 
 # Setup logging
 logging.basicConfig(
@@ -136,7 +133,7 @@ def run_extraction_workflow(open_gui: bool = False) -> bool:
             logger.info(f"  - {f.name}")
 
         # Launch GUI if requested
-        if open_gui or OPEN_ARTIFACT_VIEWER:
+        if open_gui:
             launch_artifact_viewer(run_dir)
 
         return True

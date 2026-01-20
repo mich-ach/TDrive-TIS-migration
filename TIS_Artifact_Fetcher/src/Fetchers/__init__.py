@@ -26,8 +26,8 @@ from config import (
     TIS_URL,
     DEBUG_MODE,
     LOG_LEVEL,
-    JSON_OUTPUT_PREFIX,
-    LATEST_JSON_PREFIX,
+    get_json_prefix,
+    get_latest_json_prefix,
     VW_XCU_PROJECT_ID,
     PATH_CONVENTIONS,
     COMPONENT_TYPE_FILTER,
@@ -704,7 +704,7 @@ def save_results(structured_data: Dict, output_dir: Path = None) -> Path:
             raise ValueError("Run directory not configured!")
         output_dir = config.CURRENT_RUN_DIR
 
-    output_file = output_dir / f"{JSON_OUTPUT_PREFIX}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    output_file = output_dir / f"{get_json_prefix()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
     logger.info(f"Saving results to: {output_file}")
     with open(output_file, 'w', encoding='utf-8') as f:
@@ -764,7 +764,7 @@ def save_latest_artifacts(latest_artifacts: Dict[str, Any], output_dir: Path = N
             raise ValueError("Run directory not configured!")
         output_dir = config.CURRENT_RUN_DIR
 
-    output_file = output_dir / f"{LATEST_JSON_PREFIX}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    output_file = output_dir / f"{get_latest_json_prefix()}_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
 
     logger.info(f"Saving latest artifacts to: {output_file}")
     with open(output_file, 'w', encoding='utf-8') as f:

@@ -1,12 +1,5 @@
 {
-    "_comment": "TIS Artifact Extractor Configuration - Edit values below",
-
-    "workflow": {
-        "default_excel_file": "C:/Dev/TIS_Upload_from_TDrive/TDRIVE_TIS__MIGRATION/TIS_SWLine_Model_Mapping/Kopie von Series_Maintenance_Project_List_Audi+VW_BMNr_WORK.xlsx",
-        "auto_open_report": true,
-        "generate_validation_report": true,
-        "open_artifact_viewer": false
-    },
+    "_comment": "TIS Artifact Fetcher Configuration",
 
     "debug": {
         "debug_mode": false,
@@ -61,9 +54,8 @@
         ]
     },
 
-
     "artifact_filters": {
-        "_comment": "Values can be single string or list. Set to null to disable a filter.",
+        "_comment": "Values can be single string or list. Set to null to disable a filter. JSON output filename uses component_name.",
         "component_type": ["vVeh"],
         "component_name": ["vVeh_LCO"],
         "component_grp": "TIS Artifact Container",
@@ -72,7 +64,7 @@
     },
 
     "naming_convention": {
-        "_comment": "Naming patterns for artifact validation by component_name. See README for adding more patterns.",
+        "_comment": "Naming patterns for artifact validation by component_name.",
         "enabled": true,
         "patterns": {
             "vVeh_LCO": {
@@ -102,14 +94,8 @@
         }
     },
 
-    "output": {
-        "json_prefix": "vveh_lco_artifacts",
-        "latest_json_prefix": "latest_vveh_lco_artifacts",
-        "excel_prefix": "software_line_mapping"
-    },
-
     "display": {
-        "_comment": "Date format uses Python strftime format codes: %d=day, %m=month, %Y=year, %H=hour, %M=minute, %S=second",
+        "_comment": "Date format uses Python strftime format codes",
         "date_format": "%d-%m-%Y %H:%M:%S"
     }
 }
