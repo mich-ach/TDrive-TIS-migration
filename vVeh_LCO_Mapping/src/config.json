@@ -1,0 +1,50 @@
+{
+    "_comment": "vVeh_LCO Software Line Mapping Configuration",
+
+    "workflow": {
+        "default_excel_file": "../Masterdata-XCU.xlsx",
+        "auto_open_report": false,
+        "generate_validation_report": false,
+        "tis_extractor_path": "../TIS_SWLine_Model_Mapping"
+    },
+
+    "output": {
+        "excel_prefix": "software_line_mapping"
+    },
+
+    "display": {
+        "date_format": "%d-%m-%Y %H:%M:%S"
+    },
+
+    "api": {
+        "tis_link_template": "https://rb-ps-tis-dashboard.bosch.com/?gotoCompInstanceId={}"
+    },
+
+    "excel": {
+        "_comment": "Excel column definitions and styling",
+        "master_columns": {
+            "Project line": null,
+            "ECU - HW Variante": null,
+            "Project class": null
+        },
+        "colors": {
+            "header_blue": "BDD7EE",
+            "header_green": "C6E0B4",
+            "found_green": "E8F5E8",
+            "not_found_red": "FFE6E6",
+            "not_in_tis_grey": "D9D9D9"
+        }
+    },
+
+    "naming_convention": {
+        "_comment": "vVeh_LCO specific naming patterns",
+        "enabled": true,
+        "patterns": {
+            "vveh_lco_standard": {
+                "description": "Standard vVeh_LCO artifact naming pattern",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_LCO\\s*:\\s*(?P<sw_version>[\\w]+)\\s*/\\s*(?P<model_version>[\\w]+)\\s*\\[(?P<variants>[^\\]]*)\\]\\s*(?P<suffix>.*)$",
+                "example": "VW vVeh_LCO : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
+            }
+        }
+    }
+}
