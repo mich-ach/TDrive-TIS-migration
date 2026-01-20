@@ -249,6 +249,8 @@ class ArtifactExtractor:
             'test_type': None,  # Will be set from attribute
             'test_type_path': self._extract_test_type_from_path(component_path),  # For validation
             'test_type_mismatch': False,  # Validation flag
+            'test_version': None,  # Will be set from testVersion attribute
+            'ecu_test_version': None,  # Will be extracted from execution attribute
             'user': None,
             'lco_version': None,
             'vemox_version': None,
@@ -289,10 +291,13 @@ class ArtifactExtractor:
                     condensed['labcar_type'] = value
             elif name == 'execution' and value:
                 condensed['lco_version'] = self._extract_lco_version(value)
+                condensed['ecu_test_version'] = self._extract_ecu_test_version(value)
             elif name == 'sources' and value:
                 condensed['vemox_version'] = self._extract_vemox_version(value, version_parser)
             elif name == 'testType':
                 condensed['test_type'] = value
+            elif name == 'testVersion':
+                condensed['test_version'] = value
 
         return {
             'name': component_data.get('name', 'Unknown'),
@@ -306,6 +311,8 @@ class ArtifactExtractor:
             'test_type': condensed['test_type'],
             'test_type_path': condensed['test_type_path'],
             'test_type_mismatch': condensed['test_type_mismatch'],
+            'test_version': condensed['test_version'],
+            'ecu_test_version': condensed['ecu_test_version'],
             'user': condensed['user'],
             'lco_version': condensed['lco_version'],
             'vemox_version': condensed['vemox_version'],
@@ -365,6 +372,20 @@ class ArtifactExtractor:
             if isinstance(execution_data, list):
                 for dep in execution_data:
                     if isinstance(dep, dict) and dep.get('dependency') == 'LCO':
+                        versions = dep.get('version', [])
+                        if versions:
+                            return versions[0]
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        return None
+
+    def _extract_ecu_test_version(self, execution_value: Any) -> Optional[str]:
+        """Extract ECU-TEST version from execution data."""
+        try:
+            execution_data = json.loads(execution_value) if isinstance(execution_value, str) else execution_value
+            if isinstance(execution_data, list):
+                for dep in execution_data:
+                    if isinstance(dep, dict) and dep.get('dependency') == 'ECU-TEST':
                         versions = dep.get('version', [])
                         if versions:
                             return versions[0]

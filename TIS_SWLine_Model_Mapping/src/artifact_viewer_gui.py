@@ -83,6 +83,8 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             ("software_type", "Software Type", 60, 0, "software_type"),
             ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
             ("test_type", "Test Type", 60, 0, "test_type"),
+            ("test_version", "Test Version", 70, 0, "test_version"),
+            ("ecu_test_version", "ECU-TEST Version", 80, 0, "ecu_test_version"),
             ("user", "User", 70, 0, "user"),
             ("lco_version", "LCO Version", 80, 1, "lco_version"),
             ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
