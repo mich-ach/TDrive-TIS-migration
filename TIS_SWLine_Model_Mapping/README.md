@@ -225,17 +225,25 @@ python -m src.artifact_viewer_gui path/to/artifacts.json
 
 All output is saved to `output/run_YYYYMMDD_HHMMSS/`:
 
-- `vveh_lco_artifacts_*.json` - Extracted artifacts with full metadata
+- **Artifact JSON files** - Separated by component type:
+  - `vveh_lco_artifacts_*.json` - vVeh_LCO artifacts with LCO/VeMoX versions
+  - `test_ecu_test_artifacts_*.json` - ECU-TEST artifacts with test type/version
+  - `{component_type}_artifacts_*.json` - Other artifact types
 - `software_line_mapping_*.xlsx` - Excel report with mapping results
 - `validation_report_*.xlsx` - Path/naming validation report (if enabled)
 
 ## Artifact Viewer GUI
 
-The interactive GUI allows browsing and analyzing extracted artifacts.
+The interactive GUI allows browsing and analyzing extracted artifacts with artifact type-specific columns.
 
 ### Features
 
-- **Multi-level Filtering**: Filter by project, software line, component type, simulation type, software type, labcar type, test type, LCO version, VeMoX version, lifecycle status, user, and more
+- **Artifact Type First**: Component type filter is the primary selector that determines which columns are shown
+- **Dynamic Columns**: Columns automatically adapt to the selected artifact type:
+  - **vVeh_LCO**: Shows simulation type, SW type, labcar type, LCO/VeMoX versions
+  - **test_ECU-TEST**: Shows test type, test version, ECU-TEST version
+  - **All**: Shows all available columns for mixed viewing
+- **Multi-level Filtering**: Filter by project, software line, and type-specific attributes
 - **Dynamic Column Visibility**: Empty columns are automatically hidden
 - **Sorting**: Click column headers to sort ascending/descending
 - **Search**: Free-text search across all fields
@@ -245,11 +253,12 @@ The interactive GUI allows browsing and analyzing extracted artifacts.
 ### Running the GUI
 
 ```bash
-# Open with latest artifacts
+# Open with latest artifacts (shows file picker if multiple types)
 python -m src.artifact_viewer_gui
 
 # Open specific JSON file
 python -m src.artifact_viewer_gui output/run_*/vveh_lco_artifacts_*.json
+python -m src.artifact_viewer_gui output/run_*/test_ecu_test_artifacts_*.json
 ```
 
 ## Adding New Artifact Types
@@ -330,6 +339,41 @@ class ArtifactInfo:
             custom_field=data.get('custom_field'),
         )
 ```
+
+### Step 6: Configure GUI Columns for the Artifact Type
+
+Add artifact type-specific column definitions in `artifact_viewer_gui.py`:
+
+```python
+# At the top of the file, add your column definition:
+MY_NEW_TYPE_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    # Add artifact-specific columns here:
+    ("custom_field", "Custom Field", 80, 0, "custom_field"),
+    ("user", "User", 70, 0, "user"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# Then register it in COMPONENT_COLUMNS:
+COMPONENT_COLUMNS = {
+    "vVeh_LCO": VVEH_LCO_COLUMNS,
+    "test_ECU-TEST": TEST_ECU_TEST_COLUMNS,
+    "my_new_type": MY_NEW_TYPE_COLUMNS,  # Add your type here
+}
+```
+
+Column tuple format: `(key, header, min_width, weight, data_key)`
+- `key`: Internal identifier
+- `header`: Display name in column header
+- `min_width`: Minimum column width in pixels
+- `weight`: How much extra space column gets (0 = fixed, higher = more space)
+- `data_key`: Artifact dictionary key to get value from
 
 ## Adding Component-Specific Validators
 
