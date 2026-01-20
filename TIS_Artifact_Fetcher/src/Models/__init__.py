@@ -59,6 +59,7 @@ class DeviationType(Enum):
     NAME_MISMATCH = "NAME_MISMATCH"
     # Attribute deviations
     TEST_TYPE_MISMATCH = "TEST_TYPE_MISMATCH"
+    TEST_CONFIG_SW_LINE_MISMATCH = "TEST_CONFIG_SW_LINE_MISMATCH"
 
 
 @dataclass
@@ -77,6 +78,9 @@ class ArtifactInfo:
     test_type_mismatch: bool = False
     test_version: Optional[str] = None
     ecu_test_version: Optional[str] = None
+    test_configuration: Optional[str] = None
+    testbench_configuration: Optional[str] = None
+    test_config_sw_line_mismatch: bool = False
     user: Optional[str] = None
     lco_version: Optional[str] = None
     vemox_version: Optional[str] = None
@@ -105,6 +109,9 @@ class ArtifactInfo:
             'test_type_mismatch': self.test_type_mismatch,
             'test_version': self.test_version,
             'ecu_test_version': self.ecu_test_version,
+            'test_configuration': self.test_configuration,
+            'testbench_configuration': self.testbench_configuration,
+            'test_config_sw_line_mismatch': self.test_config_sw_line_mismatch,
             'user': self.user,
             'lco_version': self.lco_version,
             'vemox_version': self.vemox_version,
@@ -135,6 +142,9 @@ class ArtifactInfo:
             test_type_mismatch=data.get('test_type_mismatch', False),
             test_version=data.get('test_version'),
             ecu_test_version=data.get('ecu_test_version'),
+            test_configuration=data.get('test_configuration'),
+            testbench_configuration=data.get('testbench_configuration'),
+            test_config_sw_line_mismatch=data.get('test_config_sw_line_mismatch', False),
             user=data.get('user'),
             lco_version=data.get('lco_version'),
             vemox_version=data.get('vemox_version'),

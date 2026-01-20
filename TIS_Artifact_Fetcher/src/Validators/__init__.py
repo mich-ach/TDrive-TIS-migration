@@ -443,6 +443,125 @@ class PathValidator:
                 return path_parts[i + 1]
         return None
 
+    def validate_test_config_software_line(
+        self,
+        component_name: str,
+        test_configuration: Optional[str],
+        testbench_configuration: Optional[str],
+        software_line: str
+    ) -> Tuple[DeviationType, str, str]:
+        """
+        Validate that P-number in test configuration matches software line.
+
+        The test configuration path contains a P-number (e.g., P2405) that should
+        match the last 4 digits of the cleaned software line name.
+
+        Cleaning rules for software line:
+        - Remove content in parentheses ()
+        - Take value before underscore _
+        - Extract continuous alphanumeric string
+        - Compare last 4 digits with P-number
+
+        Args:
+            component_name: The component type name
+            test_configuration: The testConfiguration attribute value (path)
+            testbench_configuration: The testbenchConfiguration attribute value (path)
+            software_line: The software line name
+
+        Returns:
+            Tuple of (DeviationType, details, expected_path_hint)
+        """
+        # Only validate for test_ECU-TEST components
+        if component_name != 'test_ECU-TEST':
+            return (DeviationType.VALID, "", "")
+
+        # Extract P-number from test configuration path
+        config_path = test_configuration or testbench_configuration
+        if not config_path:
+            return (DeviationType.VALID, "", "")
+
+        p_number = self._extract_p_number_from_config(config_path)
+        if not p_number:
+            return (DeviationType.VALID, "", "")
+
+        # Clean software line and get last 4 digits
+        sw_line_digits = self._extract_sw_line_digits(software_line)
+        if not sw_line_digits:
+            return (DeviationType.VALID, "", "")
+
+        # Compare P-number with software line digits
+        if p_number != sw_line_digits:
+            return (
+                DeviationType.TEST_CONFIG_SW_LINE_MISMATCH,
+                f"Test config P-number 'P{p_number}' does not match software line '{software_line}' (expected P{sw_line_digits})",
+                f"testConfiguration path should contain P{sw_line_digits} for software line '{software_line}'"
+            )
+
+        return (DeviationType.VALID, "", "")
+
+    def _extract_p_number_from_config(self, config_path: str) -> Optional[str]:
+        """
+        Extract P-number from test configuration path.
+
+        Looks for pattern like P1234 or P2405 in the path.
+
+        Args:
+            config_path: The testConfiguration or testbenchConfiguration path
+
+        Returns:
+            The 4-digit number after P, or None if not found
+        """
+        if not config_path:
+            return None
+
+        # Look for P followed by 4 digits
+        match = re.search(r'[/\\]?P(\d{4})[/\\]', config_path)
+        if match:
+            return match.group(1)
+
+        # Also try without path separators (in case P-number is at end)
+        match = re.search(r'P(\d{4})(?:[/\\]|$)', config_path)
+        if match:
+            return match.group(1)
+
+        return None
+
+    def _extract_sw_line_digits(self, software_line: str) -> Optional[str]:
+        """
+        Extract last 4 digits from cleaned software line name.
+
+        Cleaning rules:
+        1. Remove content in parentheses ()
+        2. Take value before underscore _
+        3. Extract continuous alphanumeric string
+        4. Return last 4 digits
+
+        Args:
+            software_line: The software line name
+
+        Returns:
+            The last 4 digits of the cleaned name, or None if not found
+        """
+        if not software_line:
+            return None
+
+        # Remove content in parentheses
+        cleaned = re.sub(r'\([^)]*\)', '', software_line)
+
+        # Take value before underscore
+        if '_' in cleaned:
+            cleaned = cleaned.split('_')[0]
+
+        # Extract continuous alphanumeric string (remove any remaining non-alphanumeric)
+        cleaned = re.sub(r'[^a-zA-Z0-9]', '', cleaned)
+
+        # Get last 4 digits from the cleaned string
+        digits = re.sub(r'[^0-9]', '', cleaned)
+        if len(digits) >= 4:
+            return digits[-4:]
+
+        return None
+
 
 def validate_path_simple(path: str) -> Tuple[DeviationType, str, str]:
     """

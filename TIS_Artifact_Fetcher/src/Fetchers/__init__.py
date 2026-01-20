@@ -274,6 +274,8 @@ class ArtifactFetcher:
             condensed['test_type_mismatch'] = False
             condensed['test_version'] = None
             condensed['ecu_test_version'] = None
+            condensed['test_configuration'] = None
+            condensed['testbench_configuration'] = None
 
         # Extract created date from top-level component data
         created_ticks = component_data.get('created')
@@ -315,6 +317,10 @@ class ArtifactFetcher:
                     condensed['test_version'] = value
                 elif name == 'execution' and value:
                     condensed['ecu_test_version'] = self._extract_ecu_test_version(value)
+                elif name == 'testConfiguration':
+                    condensed['test_configuration'] = value
+                elif name == 'testbenchConfiguration':
+                    condensed['testbench_configuration'] = value
 
         # Build result with common fields
         result = {
@@ -349,6 +355,8 @@ class ArtifactFetcher:
             result['test_type_mismatch'] = condensed['test_type_mismatch']
             result['test_version'] = condensed['test_version']
             result['ecu_test_version'] = condensed['ecu_test_version']
+            result['test_configuration'] = condensed['test_configuration']
+            result['testbench_configuration'] = condensed['testbench_configuration']
 
         return result
 
