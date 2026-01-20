@@ -7,8 +7,7 @@ Classes:
     PathValidator: Validates artifact paths and names against conventions
 
 The validation is config-driven:
-- path_convention.expected_structure: Maps component_name to expected path
-- path_convention.subfolder_under_SoftwareLines: Maps component_name to expected subfolders
+- path_convention: Component-specific path structures with variable values
 - naming_convention.patterns: Regex patterns for artifact name validation
 """
 
@@ -36,10 +35,8 @@ class PathValidator:
     """
     Validates artifact paths against expected conventions.
 
-    Configuration is loaded from config.json:
-    - path_convention.expected_structure: Maps component_name to expected path
-    - path_convention.subfolder_under_SoftwareLines: Expected subfolders per component_name
-    - naming_convention.patterns: Regex patterns for name validation
+    Configuration is loaded from config.json path_convention section.
+    Each component_name has its own expected_structure and variable values.
     """
 
     def __init__(self):

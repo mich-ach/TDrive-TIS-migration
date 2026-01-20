@@ -195,5 +195,10 @@ def main():
         print_results(results, parent_folder)
 
 
+# Backwards compatibility aliases
+discover_folders_from_api = discover_folders_recursive
+find_folders_under_parent = find_folders_in_tree
+
+
 if __name__ == "__main__":
     main()
