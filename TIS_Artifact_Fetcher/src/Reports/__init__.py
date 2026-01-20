@@ -224,7 +224,7 @@ def _create_by_user_sheet(wb, report, header_font_white, header_fill, thin_borde
     """Create the By User (Accountability) sheet."""
     ws_by_user = wb.create_sheet("By User (Accountability)")
 
-    user_headers = ["User", "Total Deviations", "Deviation Types", "Sample Paths"]
+    user_headers = ["User", "Total Deviations", "Deviation Types", "All Deviation Paths"]
 
     for col_idx, header in enumerate(user_headers, 1):
         cell = ws_by_user.cell(row=1, column=col_idx, value=header)
@@ -241,15 +241,14 @@ def _create_by_user_sheet(wb, report, header_font_white, header_fill, thin_borde
 
     for user, devs in all_sorted_users:
         type_counts = {}
-        sample_paths = []
+        all_paths = []
         for d in devs:
             dt = d['deviation_type']
             type_counts[dt] = type_counts.get(dt, 0) + 1
-            if len(sample_paths) < 3:
-                sample_paths.append(d['path'])
+            all_paths.append(d['path'])
 
         type_summary = ", ".join([f"{t}: {c}" for t, c in type_counts.items()])
-        paths_summary = "\n".join(sample_paths)
+        paths_summary = "\n".join(all_paths)
 
         ws_by_user.cell(row=row_idx, column=1, value=user).border = thin_border
         ws_by_user.cell(row=row_idx, column=2, value=len(devs)).border = thin_border
@@ -264,7 +263,7 @@ def _create_by_user_sheet(wb, report, header_font_white, header_fill, thin_borde
     ws_by_user.column_dimensions['A'].width = 25
     ws_by_user.column_dimensions['B'].width = 18
     ws_by_user.column_dimensions['C'].width = 45
-    ws_by_user.column_dimensions['D'].width = 70
+    ws_by_user.column_dimensions['D'].width = 100
 
 
 def _create_by_project_sheet(wb, report, header_font_white, header_fill, thin_border, get_column_letter):

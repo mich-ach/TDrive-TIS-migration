@@ -154,7 +154,8 @@ def generate_validation_report_for_component(
                 if not name_valid and NAMING_CONVENTION_ENABLED:
                     deviation_type = DeviationType.INVALID_NAME_FORMAT
                     details = f"Name format invalid: {name_error}"
-                    hint = "See naming convention patterns in config"
+                    # Get expected path structure for this component type
+                    hint = path_validator._get_expected_structure(component_type) or path_hint
                 elif path_deviation != DeviationType.VALID:
                     deviation_type = path_deviation
                     details = path_details
