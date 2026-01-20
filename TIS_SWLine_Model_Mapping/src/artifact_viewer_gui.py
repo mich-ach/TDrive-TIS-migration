@@ -68,6 +68,9 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         self.sort_column: int = -1  # -1 = no sort
         self.sort_ascending: bool = True
 
+        # Track visible columns (non-empty ones)
+        self.visible_columns: List[int] = list(range(len(self.columns)))
+
         # Column definitions: (key, header, min_width, weight, data_key)
         # weight determines how much of extra space the column gets
         # data_key is the artifact dict key to use for this column
@@ -218,8 +221,8 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         # Ensure proper layout
         self.Layout()
 
-        # Initial column width adjustment
-        wx.CallAfter(self._adjust_column_widths)
+        # Initial column width adjustment (all columns visible initially)
+        wx.CallAfter(self._adjust_column_widths_visible, self.visible_columns)
 
     def _add_filter(self, sizer: Any, key: str, label: str, width: int,
                     choices: Optional[List[str]] = None):
@@ -242,7 +245,7 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         event.Skip()  # Allow default resize handling
 
         # Delay column resize to after layout is complete
-        wx.CallAfter(self._adjust_column_widths)
+        wx.CallAfter(self._adjust_column_widths_visible, self.visible_columns)
 
     def _adjust_column_widths(self):
         """Adjust column widths based on available space."""
@@ -268,6 +271,35 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             else:
                 new_width = min_width
             self.list_ctrl.SetColumnWidth(i, new_width)
+
+    def _adjust_column_widths_visible(self, visible_cols: List[int]):
+        """Adjust column widths based on available space, only for visible columns."""
+        if not hasattr(self, 'list_ctrl') or not self.list_ctrl:
+            return
+
+        # Get available width (subtract scrollbar width)
+        available_width = self.list_ctrl.GetClientSize().width - 20
+
+        # Calculate total minimum width and total weight for visible columns only
+        total_min_width = sum(self.columns[i][2] for i in visible_cols)
+        total_weight = sum(self.columns[i][3] for i in visible_cols)
+
+        # Calculate extra space to distribute
+        extra_space = max(0, available_width - total_min_width)
+
+        # Set each column width
+        for i, (key, header, min_width, weight, data_key) in enumerate(self.columns):
+            if i in visible_cols:
+                if total_weight > 0 and extra_space > 0:
+                    # Distribute extra space proportionally by weight
+                    extra = int(extra_space * weight / total_weight)
+                    new_width = min_width + extra
+                else:
+                    new_width = min_width
+                self.list_ctrl.SetColumnWidth(i, new_width)
+            else:
+                # Keep hidden columns at 0 width
+                self.list_ctrl.SetColumnWidth(i, 0)
 
     def _on_column_click(self, event: Any):
         """Handle column header click for sorting."""
@@ -398,6 +430,10 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             bottom=Side(style='thin')
         )
 
+        # Get non-empty columns only
+        non_empty_cols = self._get_non_empty_columns()
+        visible_columns = [self.columns[i] for i in non_empty_cols]
+
         # Write filter info at top
         if active_filters:
             ws['A1'] = "Active Filters:"
@@ -410,18 +446,17 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             ws['A1'].font = Font(italic=True)
             start_row = 3
 
-        # Write headers
-        headers = [col[1] for col in self.columns]  # Get display names
-        for col_idx, header in enumerate(headers, 1):
+        # Write headers (only non-empty columns)
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(visible_columns, 1):
             cell = ws.cell(row=start_row, column=col_idx, value=header)
             cell.font = header_font
             cell.fill = header_fill
             cell.alignment = header_alignment
             cell.border = thin_border
 
-        # Write data
+        # Write data (only non-empty columns)
         for row_idx, artifact in enumerate(self.filtered_artifacts, start_row + 1):
-            for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns, 1):
+            for col_idx, (key, header, min_width, weight, data_key) in enumerate(visible_columns, 1):
                 value = artifact.get(data_key, '')
                 # Format boolean values
                 if value is True:
@@ -434,8 +469,8 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
                 cell = ws.cell(row=row_idx, column=col_idx, value=value)
                 cell.border = thin_border
 
-        # Auto-adjust column widths
-        for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns, 1):
+        # Auto-adjust column widths (only non-empty columns)
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(visible_columns, 1):
             # Calculate max width based on content
             max_length = len(header)
             for row_idx in range(start_row + 1, start_row + 1 + len(self.filtered_artifacts)):
@@ -809,10 +844,39 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         else:
             return str(value)
 
+    def _get_non_empty_columns(self) -> List[int]:
+        """Get indices of columns that have at least one non-empty value in filtered artifacts."""
+        non_empty_cols = []
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns):
+            has_value = False
+            for artifact in self.filtered_artifacts:
+                value = artifact.get(data_key)
+                # Check if value is non-empty (not None, not empty string, not False for non-boolean)
+                if value is not None and value != '':
+                    has_value = True
+                    break
+            if has_value:
+                non_empty_cols.append(col_idx)
+        return non_empty_cols
+
     def _populate_list(self):
         """Populate the list control with filtered artifacts."""
         self.list_ctrl.DeleteAllItems()
 
+        # Get columns that have at least one non-empty value
+        non_empty_cols = self._get_non_empty_columns()
+        self.visible_columns = non_empty_cols  # Store for resize handler
+
+        # Hide empty columns, show non-empty ones
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns):
+            if col_idx in non_empty_cols:
+                # Show column with appropriate width
+                self.list_ctrl.SetColumnWidth(col_idx, min_width)
+            else:
+                # Hide column by setting width to 0
+                self.list_ctrl.SetColumnWidth(col_idx, 0)
+
+        # Populate rows
         for idx, artifact in enumerate(self.filtered_artifacts):
             # Dynamically populate all columns based on column definitions
             for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns):
@@ -823,6 +887,9 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
                     self.list_ctrl.InsertItem(idx, cell_text)
                 else:
                     self.list_ctrl.SetItem(idx, col_idx, cell_text)
+
+        # Re-adjust column widths for visible columns
+        wx.CallAfter(self._adjust_column_widths_visible, non_empty_cols)
 
     def _get_selected_artifact(self) -> Optional[Dict]:
         """Get the currently selected artifact."""
