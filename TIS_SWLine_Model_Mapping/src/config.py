@@ -7,7 +7,7 @@ All other modules should import from this file.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 import json
 import os
 
