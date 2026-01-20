@@ -3,8 +3,8 @@
 
     "workflow": {
         "default_excel_file": "C:/Dev/TIS_Upload_from_TDrive/TDRIVE_TIS__MIGRATION/TIS_SWLine_Model_Mapping/Kopie von Series_Maintenance_Project_List_Audi+VW_BMNr_WORK.xlsx",
-        "auto_open_report": false,
-        "generate_validation_report": false,
+        "auto_open_report": true,
+        "generate_validation_report": true,
         "open_artifact_viewer": false
     },
 
