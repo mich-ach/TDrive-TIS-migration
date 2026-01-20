@@ -1,10 +1,10 @@
-"""TIS Artifact Extractor - Uses Api/TISClient for all HTTP operations.
+"""TIS Artifact Fetcher - Uses Api/TISClient for all HTTP operations.
 
-This module provides the ArtifactExtractor class for extracting artifacts from TIS
+This module provides the ArtifactFetcher class for fetching artifacts from TIS
 and producing JSON output compatible with ExcelHandler.
 
 Classes:
-    ArtifactExtractor: Extracts artifacts using recursive BFS search
+    ArtifactFetcher: Fetches artifacts using recursive BFS search
 """
 
 import datetime
@@ -47,9 +47,9 @@ from config import (
 logger = logging.getLogger(__name__)
 
 
-class ArtifactExtractor:
+class ArtifactFetcher:
     """
-    TIS Artifact Extractor using recursive BFS search.
+    TIS Artifact Fetcher using recursive BFS search.
 
     Uses Api/TISClient for all HTTP operations with:
     - Connection pooling
@@ -620,7 +620,7 @@ def extract_latest_artifacts(structured_data: Dict[str, Any]) -> Dict[str, Any]:
     Extract the latest artifact (highest rId) for each software line.
 
     Args:
-        structured_data: Output from ArtifactExtractor.extract()
+        structured_data: Output from ArtifactFetcher.extract()
 
     Returns:
         Dict with latest_artifact for each software line
@@ -658,7 +658,7 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
     Separate artifacts by component_type into separate data structures.
 
     Args:
-        structured_data: Output from ArtifactExtractor.extract()
+        structured_data: Output from ArtifactFetcher.extract()
 
     Returns:
         Dict keyed by component_type, each containing the same structure as input
@@ -719,7 +719,7 @@ def save_results_by_component_type(structured_data: Dict, output_dir: Path = Non
     Save artifacts separated by component_type to individual JSON files.
 
     Args:
-        structured_data: Output from ArtifactExtractor.extract()
+        structured_data: Output from ArtifactFetcher.extract()
         output_dir: Output directory (defaults to config.CURRENT_RUN_DIR)
 
     Returns:
@@ -787,7 +787,7 @@ def run_extraction() -> bool:
         if not config.CURRENT_RUN_DIR or not isinstance(config.CURRENT_RUN_DIR, Path):
             raise ValueError("Run directory not properly configured!")
 
-        extractor = ArtifactExtractor()
+        extractor = ArtifactFetcher()
         structured_data = extractor.extract()
 
         if not structured_data:

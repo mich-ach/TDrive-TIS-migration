@@ -35,7 +35,7 @@ import sys
 from pathlib import Path
 from typing import Optional
 
-from Extractors import run_extraction as extract_artifacts
+from Fetchers import run_extraction as fetch_artifacts
 
 import config
 from config import (
@@ -118,7 +118,7 @@ def run_extraction_workflow(open_gui: bool = False) -> bool:
         logger.info("This may take several minutes depending on the number of artifacts.")
         logger.info("")
 
-        if not extract_artifacts():
+        if not fetch_artifacts():
             logger.error("Extraction failed!")
             return False
 
