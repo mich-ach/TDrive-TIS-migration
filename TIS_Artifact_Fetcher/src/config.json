@@ -97,5 +97,10 @@
     "display": {
         "_comment": "Date format uses Python strftime format codes",
         "date_format": "%d-%m-%Y %H:%M:%S"
+    },
+
+    "validation": {
+        "_comment": "Generate validation report showing path/naming deviations",
+        "generate_validation_report": true
     }
 }

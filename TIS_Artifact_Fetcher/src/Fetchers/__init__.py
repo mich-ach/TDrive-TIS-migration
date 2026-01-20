@@ -231,29 +231,25 @@ class ArtifactFetcher:
         component_id: str,
         version_parser: VersionParser
     ) -> Optional[Dict[str, Any]]:
-        """Extract artifact information in the format expected by ExcelHandler."""
+        """Extract artifact information in the format expected by ExcelHandler.
+
+        Fields are included based on component type:
+        - vVeh_LCO: includes simulation_type, software_type, labcar_type, lco_version, vemox_version, is_genuine_build
+        - test_ECU-TEST: includes test_type, test_type_path, test_type_mismatch, test_version, ecu_test_version
+        """
         attributes = component_data.get('attributes', [])
 
         actual_component_type = component_data.get('componentType', {}).get('name', 'Unknown')
         actual_component_name = component_data.get('component', {}).get('name', 'Unknown')
         actual_component_grp = component_data.get('componentGrp', {}).get('name', 'Unknown')
 
+        # Determine artifact type for field filtering
+        is_vveh_lco = actual_component_name == 'vVeh_LCO'
+        is_test_artifact = actual_component_name == 'test_ECU-TEST'
+
+        # Common fields for all artifact types
         condensed = {
-            'component_type': actual_component_name,
-            'component_type_category': actual_component_type,
-            'component_grp': actual_component_grp,
-            'simulation_type': self._extract_simulation_type(component_path),
-            'software_type': self._extract_software_type(component_path),
-            'labcar_type': self._extract_labcar_type(component_path),
-            'test_type': None,  # Will be set from attribute
-            'test_type_path': self._extract_test_type_from_path(component_path),  # For validation
-            'test_type_mismatch': False,  # Validation flag
-            'test_version': None,  # Will be set from testVersion attribute
-            'ecu_test_version': None,  # Will be extracted from execution attribute
             'user': None,
-            'lco_version': None,
-            'vemox_version': None,
-            'is_genuine_build': None,
             'life_cycle_status': None,
             'release_date_time': None,
             'created_date': None,
@@ -261,6 +257,23 @@ class ArtifactFetcher:
             'deleted_date': None,
             'build_type': None
         }
+
+        # vVeh_LCO specific fields
+        if is_vveh_lco:
+            condensed['simulation_type'] = self._extract_simulation_type(component_path)
+            condensed['software_type'] = self._extract_software_type(component_path)
+            condensed['labcar_type'] = self._extract_labcar_type(component_path)
+            condensed['lco_version'] = None
+            condensed['vemox_version'] = None
+            condensed['is_genuine_build'] = None
+
+        # test_ECU-TEST specific fields
+        if is_test_artifact:
+            condensed['test_type'] = None
+            condensed['test_type_path'] = self._extract_test_type_from_path(component_path)
+            condensed['test_type_mismatch'] = False
+            condensed['test_version'] = None
+            condensed['ecu_test_version'] = None
 
         # Extract created date from top-level component data
         created_ticks = component_data.get('created')
@@ -276,8 +289,6 @@ class ArtifactFetcher:
 
             if name == 'user':
                 condensed['user'] = value.lower() if value else value
-            elif name == 'isGenuineBuild':
-                condensed['is_genuine_build'] = str(value).lower() == 'true'
             elif name == 'lifeCycleStatus':
                 condensed['life_cycle_status'] = value
             elif name == 'releaseDateTime':
@@ -285,37 +296,34 @@ class ArtifactFetcher:
             elif name == 'tisFileDeletedDate':
                 condensed['deleted_date'] = convert_ticks_to_iso(value)
                 condensed['is_deleted'] = ArtifactFilter.is_artifact_deleted(attributes)
-            elif name == 'lcType':
-                if not condensed['labcar_type']:
-                    condensed['labcar_type'] = value
-            elif name == 'execution' and value:
-                condensed['lco_version'] = self._extract_lco_version(value)
-                condensed['ecu_test_version'] = self._extract_ecu_test_version(value)
-            elif name == 'sources' and value:
-                condensed['vemox_version'] = self._extract_vemox_version(value, version_parser)
-            elif name == 'testType':
-                condensed['test_type'] = value
-            elif name == 'testVersion':
-                condensed['test_version'] = value
+            # vVeh_LCO specific attribute extraction
+            elif is_vveh_lco:
+                if name == 'isGenuineBuild':
+                    condensed['is_genuine_build'] = str(value).lower() == 'true'
+                elif name == 'lcType':
+                    if not condensed['labcar_type']:
+                        condensed['labcar_type'] = value
+                elif name == 'execution' and value:
+                    condensed['lco_version'] = self._extract_lco_version(value)
+                elif name == 'sources' and value:
+                    condensed['vemox_version'] = self._extract_vemox_version(value, version_parser)
+            # test_ECU-TEST specific attribute extraction
+            elif is_test_artifact:
+                if name == 'testType':
+                    condensed['test_type'] = value
+                elif name == 'testVersion':
+                    condensed['test_version'] = value
+                elif name == 'execution' and value:
+                    condensed['ecu_test_version'] = self._extract_ecu_test_version(value)
 
-        return {
+        # Build result with common fields
+        result = {
             'name': component_data.get('name', 'Unknown'),
             'artifact_rid': component_id,
-            'component_type': condensed['component_type'],
-            'component_type_category': condensed['component_type_category'],
-            'component_grp': condensed['component_grp'],
-            'simulation_type': condensed['simulation_type'],
-            'software_type': condensed['software_type'],
-            'labcar_type': condensed['labcar_type'],
-            'test_type': condensed['test_type'],
-            'test_type_path': condensed['test_type_path'],
-            'test_type_mismatch': condensed['test_type_mismatch'],
-            'test_version': condensed['test_version'],
-            'ecu_test_version': condensed['ecu_test_version'],
+            'component_type': actual_component_name,
+            'component_type_category': actual_component_type,
+            'component_grp': actual_component_grp,
             'user': condensed['user'],
-            'lco_version': condensed['lco_version'],
-            'vemox_version': condensed['vemox_version'],
-            'is_genuine_build': condensed['is_genuine_build'],
             'life_cycle_status': condensed['life_cycle_status'],
             'release_date_time': condensed['release_date_time'],
             'created_date': condensed['created_date'],
@@ -324,6 +332,25 @@ class ArtifactFetcher:
             'build_type': condensed['build_type'],
             'upload_path': component_path
         }
+
+        # Add vVeh_LCO specific fields
+        if is_vveh_lco:
+            result['simulation_type'] = condensed['simulation_type']
+            result['software_type'] = condensed['software_type']
+            result['labcar_type'] = condensed['labcar_type']
+            result['lco_version'] = condensed['lco_version']
+            result['vemox_version'] = condensed['vemox_version']
+            result['is_genuine_build'] = condensed['is_genuine_build']
+
+        # Add test_ECU-TEST specific fields
+        if is_test_artifact:
+            result['test_type'] = condensed['test_type']
+            result['test_type_path'] = condensed['test_type_path']
+            result['test_type_mismatch'] = condensed['test_type_mismatch']
+            result['test_version'] = condensed['test_version']
+            result['ecu_test_version'] = condensed['ecu_test_version']
+
+        return result
 
     def _extract_software_type(self, path: str) -> Optional[str]:
         """Extract software type (CSP/SWB) from path."""
@@ -737,8 +764,8 @@ def save_results_by_component_type(structured_data: Dict, output_dir: Path = Non
     timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
 
     for comp_type, comp_data in by_component.items():
-        # Create filename from component type (sanitize for filesystem)
-        safe_name = comp_type.lower().replace(' ', '_').replace('-', '_')
+        # Create filename from component type (sanitize for filesystem, preserve case)
+        safe_name = comp_type.replace(' ', '_')
         output_file = output_dir / f"{safe_name}_artifacts_{timestamp}.json"
 
         # Count artifacts
@@ -774,14 +801,60 @@ def save_latest_artifacts(latest_artifacts: Dict[str, Any], output_dir: Path = N
     return output_file
 
 
-def run_extraction() -> bool:
+def save_latest_artifacts_by_component_type(structured_data: Dict[str, Any], output_dir: Path = None) -> Dict[str, Path]:
+    """
+    Save latest artifacts separated by component_type to individual JSON files.
+
+    Args:
+        structured_data: Output from ArtifactFetcher.extract()
+        output_dir: Output directory (defaults to config.CURRENT_RUN_DIR)
+
+    Returns:
+        Dict mapping component_type to output file path
+    """
+    if output_dir is None:
+        if not config.CURRENT_RUN_DIR:
+            raise ValueError("Run directory not configured!")
+        output_dir = config.CURRENT_RUN_DIR
+
+    # First separate by component type
+    by_component = separate_by_component_type(structured_data)
+
+    output_files = {}
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    for comp_type, comp_data in by_component.items():
+        # Extract latest artifacts for this component type
+        latest_for_type = extract_latest_artifacts(comp_data)
+
+        # Create filename from component type (sanitize for filesystem, preserve case)
+        safe_name = comp_type.replace(' ', '_')
+        output_file = output_dir / f"latest_{safe_name}_artifacts_{timestamp}.json"
+
+        # Count latest artifacts
+        artifact_count = sum(
+            1 for proj in latest_for_type.values()
+            for sw in proj['software_lines'].values()
+            if sw.get('latest_artifact') is not None
+        )
+
+        logger.info(f"Saving {artifact_count} latest {comp_type} artifacts to: {output_file}")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(latest_for_type, f, indent=2, default=str)
+
+        output_files[comp_type] = output_file
+
+    return output_files
+
+
+def run_extraction() -> Tuple[bool, Optional[Dict[str, Any]]]:
     """
     Main function to run artifact extraction.
 
     This is a convenience function that replaces the old tis_artifact_extractor.main()
 
     Returns:
-        True if successful, False otherwise
+        Tuple of (success: bool, structured_data: Dict or None)
     """
     try:
         if not config.CURRENT_RUN_DIR or not isinstance(config.CURRENT_RUN_DIR, Path):
@@ -792,33 +865,35 @@ def run_extraction() -> bool:
 
         if not structured_data:
             logger.error("No data extracted!")
-            return False
+            return False, None
 
         # Save artifacts separated by component type
         output_files = save_results_by_component_type(structured_data)
         logger.info(f"Saved {len(output_files)} component type files: {list(output_files.keys())}")
 
-        # Extract and save latest artifacts
-        latest_artifacts = extract_latest_artifacts(structured_data)
+        # Save latest artifacts separated by component type
+        latest_output_files = save_latest_artifacts_by_component_type(structured_data)
+        logger.info(f"Saved {len(latest_output_files)} latest artifact files: {list(latest_output_files.keys())}")
 
         # Print summary
-        count = sum(
-            1 for p in latest_artifacts.values()
-            for sw in p['software_lines'].values()
-            if sw['latest_artifact'] is not None
-        )
-        logger.info(f"Total software lines with artifacts: {count}")
-
-        save_latest_artifacts(latest_artifacts)
+        by_component = separate_by_component_type(structured_data)
+        for comp_type, comp_data in by_component.items():
+            latest_for_type = extract_latest_artifacts(comp_data)
+            count = sum(
+                1 for p in latest_for_type.values()
+                for sw in p['software_lines'].values()
+                if sw.get('latest_artifact') is not None
+            )
+            logger.info(f"  {comp_type}: {count} software lines with artifacts")
 
         logger.info("=" * 60)
         logger.info("EXTRACTION COMPLETE")
         logger.info("=" * 60)
 
-        return True
+        return True, structured_data
 
     except Exception as e:
         logger.error(f"Error in TIS artifact extraction: {e}")
         import traceback
         traceback.print_exc()
-        return False
+        return False, None

@@ -151,6 +151,13 @@ CURRENT_RUN_DIR: Optional[Path] = None
 OUTPUT_DIR.mkdir(exist_ok=True)
 
 # =============================================================================
+# VALIDATION SETTINGS (from config.json)
+# =============================================================================
+
+GENERATE_VALIDATION_REPORT = _config.get("validation", {}).get("generate_validation_report", True)
+TIS_LINK_TEMPLATE = _config.get("api", {}).get("tis_link_template", "https://rb-ps-tis-dashboard.bosch.com/?gotoCompInstanceId={}")
+
+# =============================================================================
 # VERSION PARSING PATTERNS
 # =============================================================================
 
