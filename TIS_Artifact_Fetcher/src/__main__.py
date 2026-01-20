@@ -16,7 +16,7 @@ Features:
 Output:
 - {component_type}_artifacts_{timestamp}.json - Artifacts grouped by component type
 - latest_{component_type}_artifacts_{timestamp}.json - Latest artifact per software line
-- optimized_validation_report_{timestamp}.xlsx - Validation report (if enabled)
+- {component_type}_validation_report_{timestamp}.xlsx - Validation report per component type (if enabled)
 
 Usage:
     python -m TIS_SWLine_Model_Mapping [--gui]
@@ -99,34 +99,35 @@ def launch_artifact_viewer(search_dir: Path) -> None:
         logger.warning(f"Failed to launch artifact viewer: {e}")
 
 
-def generate_validation_report(structured_data: Dict[str, Any], output_dir: Path) -> Optional[str]:
+def generate_validation_report_for_component(
+    component_name: str,
+    component_data: Dict[str, Any],
+    output_dir: Path,
+    path_validator,
+    DeviationType,
+    ValidationReport,
+    generate_excel_report
+) -> Optional[str]:
     """
-    Generate a validation report showing path and naming convention deviations.
+    Generate a validation report for a single component type.
 
     Args:
-        structured_data: The extracted artifact data from ArtifactFetcher.extract()
+        component_name: Name of the component type (e.g., 'vVeh_LCO', 'test_ECU-TEST')
+        component_data: The extracted artifact data for this component type
         output_dir: Directory to save the validation report
+        path_validator: PathValidator instance
+        DeviationType: DeviationType enum
+        ValidationReport: ValidationReport class
+        generate_excel_report: Function to generate Excel report
 
     Returns:
         Path to the generated Excel file, or None if generation failed
     """
-    try:
-        from Reports import generate_excel_report
-        from Validators import PathValidator
-        from Models import DeviationType, ValidationReport
-    except ImportError as e:
-        logger.warning(f"Could not import validation modules: {e}")
-        return None
-
-    logger.info("Generating Validation Report (Path & Naming Deviations)")
-
-    path_validator = PathValidator()
-
     report = ValidationReport(
         timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
 
-    for project_name, project_data in structured_data.items():
+    for project_name, project_data in component_data.items():
         report.total_projects += 1
         report.processed_projects += 1
 
@@ -191,15 +192,71 @@ def generate_validation_report(structured_data: Dict[str, Any], output_dir: Path
                     report.deviations_by_project[project_name].append(artifact_dict)
 
     if report.total_artifacts_found > 0:
-        output_file = generate_excel_report(report, output_dir)
-        logger.info("Validation Report Summary:")
-        logger.info(f"  Total Artifacts: {report.total_artifacts_found}")
-        logger.info(f"  Valid: {report.valid_artifacts}")
-        logger.info(f"  Deviations: {report.deviations_found}")
-        return output_file
-    else:
-        logger.info("No artifacts found to validate")
-        return None
+        # Create component-specific filename
+        safe_name = component_name.replace(' ', '_')
+        timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+        output_file = output_dir / f"{safe_name}_validation_report_{timestamp}.xlsx"
+
+        # Generate report with custom filename
+        from Reports import generate_excel_report as _gen_report
+        result = _gen_report(report, output_dir)
+
+        # Rename to component-specific name if successful
+        if result:
+            result_path = Path(result)
+            if result_path.exists():
+                result_path.rename(output_file)
+                return str(output_file)
+
+        return result
+    return None
+
+
+def generate_validation_reports_by_component(structured_data: Dict[str, Any], output_dir: Path) -> Dict[str, str]:
+    """
+    Generate separate validation reports for each component type.
+
+    Args:
+        structured_data: The extracted artifact data from ArtifactFetcher.extract()
+        output_dir: Directory to save the validation reports
+
+    Returns:
+        Dict mapping component_name to output file path
+    """
+    try:
+        from Reports import generate_excel_report
+        from Validators import PathValidator
+        from Models import DeviationType, ValidationReport
+    except ImportError as e:
+        logger.warning(f"Could not import validation modules: {e}")
+        return {}
+
+    logger.info("Generating Validation Reports by Component Type (Path & Naming Deviations)")
+
+    path_validator = PathValidator()
+    output_files = {}
+
+    # Separate data by component type
+    by_component = separate_by_component_type(structured_data)
+
+    for component_name, component_data in by_component.items():
+        logger.info(f"  Generating validation report for {component_name}...")
+
+        output_file = generate_validation_report_for_component(
+            component_name=component_name,
+            component_data=component_data,
+            output_dir=output_dir,
+            path_validator=path_validator,
+            DeviationType=DeviationType,
+            ValidationReport=ValidationReport,
+            generate_excel_report=generate_excel_report
+        )
+
+        if output_file:
+            output_files[component_name] = output_file
+            logger.info(f"    -> {Path(output_file).name}")
+
+    return output_files
 
 
 def run_extraction_workflow(open_gui: bool = False) -> bool:
@@ -245,13 +302,12 @@ def run_extraction_workflow(open_gui: bool = False) -> bool:
         for f in sorted(output_files):
             logger.info(f"  - {f.name}")
 
-        # Generate validation report if enabled
+        # Generate validation reports (one per component type) if enabled
         if GENERATE_VALIDATION_REPORT and structured_data:
             logger.info("")
-            logger.info("Generating validation report...")
-            validation_report_file = generate_validation_report(structured_data, run_dir)
-            if validation_report_file:
-                logger.info(f"  - {Path(validation_report_file).name}")
+            validation_report_files = generate_validation_reports_by_component(structured_data, run_dir)
+            if validation_report_files:
+                logger.info(f"Generated {len(validation_report_files)} validation report(s)")
 
         # Launch GUI if requested
         if open_gui:
