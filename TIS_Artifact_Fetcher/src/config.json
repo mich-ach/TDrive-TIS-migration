@@ -69,8 +69,8 @@
         "patterns": {
             "vVeh_LCO": {
                 "description": "vVeh_LCO artifact: [timestamp -] [date] VW MDL[_suffix] : <Project> / <Subversion> [; <id>]",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?(?:[\\d\\-]+\\s+)?VW\\s+MDL(?:_[A-Za-z0-9]+)?\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\s;]+)(?:\\s*;\\s*(?P<id>\\d+))?$",
-                "example": "VW MDL : Project / Sub ; 220324 or 2022-01-26T19:12:11Z - 2022-01-26 VW MDL_HIL : Project / Sub"
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?(?:[\\d\\-]+\\s+)?VW\\s+MDL(?:_[A-Za-z0-9]+)?\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\s;]+)(?:\\s*;\\s*(?P<id>[a-zA-Z0-9]+))?$",
+                "example": "VW MDL : Project / Sub ; 220324 or VW MDL : Project / Sub ; 19mmdd"
             },
             "test_ECU-TEST": {
                 "description": "test_ECU-TEST artifact: [timestamp -] [date] VW TST[_suffix] : <TestName> [; <id>]",
