@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Discover unique folder names under a specific parent folder using TIS API.
+Discover unique folder names under a specific parent folder using recursive TIS API calls.
 
-Makes a single API call to fetch the project tree and finds all folders
+Searches the tree structure recursively to find all folders
 that appear directly under the specified parent folder.
 
 Usage:
-    python -m src.utils.discover_folders <parent_folder> [children_level]
+    python -m src.utils.discover_folders <parent_folder>
 
 Examples:
     python -m src.utils.discover_folders Test      # Find TestTypes
@@ -29,25 +29,22 @@ from Api import TISClient
 from config import VW_XCU_PROJECT_ID
 
 
-def find_folders_under_parent(
-    component: Dict[str, Any],
+def find_folders_in_tree(
+    data: Dict[str, Any],
     parent_folder: str,
     results: Dict[str, Set[str]],
-    path: List[str] = None
+    path: List[str]
 ) -> None:
     """
     Recursively find folders directly under the specified parent folder.
 
     Args:
-        component: TIS component data
+        data: TIS component data
         parent_folder: The folder name to look for (e.g., "Test", "SiL")
         results: Dict to store results (folder_name -> set of paths)
         path: Current path as list of folder names
     """
-    if path is None:
-        path = []
-
-    name = component.get('name', '')
+    name = data.get('name', '')
     current_path = path + [name] if name else path
 
     # Check if parent was the target folder
@@ -56,42 +53,80 @@ def find_folders_under_parent(
         results[name].add(path_str)
 
     # Recurse into children
-    children = component.get('children', [])
+    children = data.get('children', [])
     for child in children:
-        find_folders_under_parent(child, parent_folder, results, current_path)
+        find_folders_in_tree(child, parent_folder, results, current_path)
 
 
-def discover_folders_from_api(parent_folder: str, children_level: int = 6) -> Dict[str, Set[str]]:
+def discover_folders_recursive(
+    client: TISClient,
+    parent_folder: str,
+    search_depth: int = 4
+) -> Dict[str, Set[str]]:
     """
-    Discover folders under parent_folder by fetching from TIS API.
+    Discover folders under parent_folder using recursive API calls.
+
+    Follows the structure: Project/SoftwareLine/.../parent_folder/target
 
     Args:
-        parent_folder: The folder to search under (e.g., "Test", "SiL")
-        children_level: Depth of children to fetch
+        client: TISClient instance
+        parent_folder: The folder to search under (e.g., "Test", "SiL", "vVeh")
+        search_depth: Depth to search within each software line
 
     Returns:
         Dict mapping folder_name -> Set of example paths
     """
-    print(f"Fetching TIS data (children_level={children_level})...")
-    print(f"Root project ID: {VW_XCU_PROJECT_ID}")
-    print(f"Looking for folders under: {parent_folder}/")
+    results: Dict[str, Set[str]] = defaultdict(set)
 
-    client = TISClient(children_level=children_level)
-    data, timed_out, elapsed = client.get_component(
-        VW_XCU_PROJECT_ID,
-        children_level=children_level,
-        use_cache=False
+    # Step 1: Get all projects
+    print(f"Fetching projects from root: {VW_XCU_PROJECT_ID}")
+    root_data, timed_out, elapsed = client.get_component(
+        VW_XCU_PROJECT_ID, children_level=1
     )
 
-    if timed_out or not data:
-        print(f"Error: API call failed or timed out (elapsed: {elapsed:.1f}s)")
-        return {}
+    if timed_out or not root_data:
+        print(f"Error: Failed to fetch root project (elapsed: {elapsed:.1f}s)")
+        return results
 
-    print(f"API call completed in {elapsed:.1f}s")
+    projects = root_data.get('children', [])
+    print(f"Found {len(projects)} projects ({elapsed:.1f}s)")
 
-    # Find all folders under the parent
-    results: Dict[str, Set[str]] = defaultdict(set)
-    find_folders_under_parent(data, parent_folder, results)
+    # Step 2: For each project, get software lines
+    for proj_idx, project in enumerate(projects, 1):
+        project_name = project.get('name', 'Unknown')
+        project_id = project.get('rId')
+
+        if not project_id:
+            continue
+
+        print(f"  [{proj_idx}/{len(projects)}] Project: {project_name}")
+
+        proj_data, timed_out, _ = client.get_component(project_id, children_level=1)
+        if timed_out or not proj_data:
+            continue
+
+        software_lines = proj_data.get('children', [])
+
+        # Step 3: For each software line, search for parent_folder
+        for sw_line in software_lines:
+            sw_line_name = sw_line.get('name', 'Unknown')
+            sw_line_id = sw_line.get('rId')
+
+            if not sw_line_id:
+                continue
+
+            # Fetch software line with enough depth to find parent_folder and its children
+            sw_data, timed_out, _ = client.get_component(sw_line_id, children_level=search_depth)
+            if timed_out or not sw_data:
+                continue
+
+            # Recursively find folders under parent_folder
+            find_folders_in_tree(
+                sw_data,
+                parent_folder,
+                results,
+                [project_name, sw_line_name]
+            )
 
     return results
 
@@ -112,8 +147,8 @@ def print_results(results: Dict[str, Set[str]], parent_folder: str) -> None:
     print("-" * 60)
 
     for folder_name in sorted_folders:
-        examples = sorted(results[folder_name])[:2]
-        print(f"\n{folder_name}/")
+        examples = sorted(results[folder_name])[:3]
+        print(f"\n{folder_name}/ ({len(results[folder_name])} occurrences)")
         for ex in examples:
             print(f"  {ex}")
 
@@ -125,7 +160,7 @@ def print_results(results: Dict[str, Set[str]], parent_folder: str) -> None:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python -m src.utils.discover_folders <parent_folder> [children_level]")
+        print("Usage: python -m src.utils.discover_folders <parent_folder> [search_depth]")
         print("\nExamples:")
         print("  python -m src.utils.discover_folders Test   # Find TestTypes")
         print("  python -m src.utils.discover_folders SiL    # Find SiL subfolders")
@@ -134,20 +169,28 @@ def main():
         sys.exit(1)
 
     parent_folder = sys.argv[1]
-    children_level = 6
+    search_depth = 4
 
     if len(sys.argv) > 2:
         try:
-            children_level = int(sys.argv[2])
+            search_depth = int(sys.argv[2])
         except ValueError:
-            print(f"Invalid children_level: {sys.argv[2]}")
+            print(f"Invalid search_depth: {sys.argv[2]}")
             sys.exit(1)
 
-    results = discover_folders_from_api(parent_folder, children_level)
+    print("TIS Folder Discovery Tool")
+    print("=" * 60)
+    print(f"Root project ID: {VW_XCU_PROJECT_ID}")
+    print(f"Looking for folders under: {parent_folder}/")
+    print(f"Search depth: {search_depth}")
+    print("=" * 60 + "\n")
+
+    client = TISClient(children_level=search_depth)
+    results = discover_folders_recursive(client, parent_folder, search_depth)
 
     if not results:
         print(f"\nNo folders found under '{parent_folder}/'")
-        print("Try increasing children_level for deeper search.")
+        print("Try increasing search_depth for deeper search.")
     else:
         print_results(results, parent_folder)
 
