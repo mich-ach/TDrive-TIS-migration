@@ -164,5 +164,10 @@ def main():
         print_results(results)
 
 
+# Backwards compatibility aliases
+discover_test_types_from_api = discover_test_types_recursive
+find_test_type_folders = find_test_types_in_tree
+
+
 if __name__ == "__main__":
     main()
