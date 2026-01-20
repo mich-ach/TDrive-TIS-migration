@@ -7,8 +7,7 @@ Classes:
     PathValidator: Validates artifact paths and names against conventions
 
 The validation is config-driven:
-- path_convention.expected_structure: Maps component_name to expected path
-- path_convention.subfolder_under_SoftwareLines: Maps component_name to expected subfolders
+- path_convention: Component-specific path structures with variable values
 - naming_convention.patterns: Regex patterns for artifact name validation
 """
 
@@ -21,25 +20,23 @@ from Models import DeviationType
 from config import (
     PATH_CONVENTION_ENABLED,
     PATH_CONVENTIONS,
-    PATH_VALID_SUBFOLDERS_HIL,
     NAMING_CONVENTION_ENABLED,
     NAMING_CONVENTION_PATTERNS,
 )
 
 logger = logging.getLogger(__name__)
 
-# Expected path patterns
-CSP_SWB_PATTERN = re.compile(r"(CSP|SWB)", re.IGNORECASE)
+# Get CSP/SWB patterns from path convention (fallback to defaults)
+CSP_SWB_SUBFOLDERS = PATH_CONVENTIONS.get("vVeh_LCO", {}).get("CSP_SWB_contains", ["CSP", "SWB"])
+CSP_SWB_PATTERN = re.compile(r"(" + "|".join(CSP_SWB_SUBFOLDERS) + ")", re.IGNORECASE)
 
 
 class PathValidator:
     """
     Validates artifact paths against expected conventions.
 
-    Configuration is loaded from config.json:
-    - path_convention.expected_structure: Maps component_name to expected path
-    - path_convention.subfolder_under_SoftwareLines: Expected subfolders per component_name
-    - naming_convention.patterns: Regex patterns for name validation
+    Configuration is loaded from config.json path_convention section.
+    Each component_name has its own expected_structure and variable values.
     """
 
     def __init__(self):
@@ -118,7 +115,7 @@ class PathValidator:
         is_sil_path = 'SiL' in remaining
 
         if not is_hil_path and not is_sil_path:
-            if remaining and any(sf in remaining[0] for sf in PATH_VALID_SUBFOLDERS_HIL):
+            if remaining and any(sf in remaining[0] for sf in CSP_SWB_SUBFOLDERS):
                 return (
                     DeviationType.CSP_SWB_UNDER_MODEL,
                     f"{remaining[0]} directly under Model (missing HiL)",
@@ -261,7 +258,7 @@ class PathValidator:
             )
 
         first_after_hil = after_hil[0]
-        check_subfolders = expected_subfolders if expected_subfolders else PATH_VALID_SUBFOLDERS_HIL
+        check_subfolders = expected_subfolders if expected_subfolders else CSP_SWB_SUBFOLDERS
         is_valid_subfolder = any(
             sf.lower() in first_after_hil.lower()
             for sf in check_subfolders
