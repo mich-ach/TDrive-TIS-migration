@@ -123,6 +123,9 @@ def generate_validation_report_for_component(
     Returns:
         Path to the generated Excel file, or None if generation failed
     """
+    import time
+    start_time = time.time()
+
     report = ValidationReport(
         timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     )
@@ -191,15 +194,18 @@ def generate_validation_report_for_component(
                         report.deviations_by_project[project_name] = []
                     report.deviations_by_project[project_name].append(artifact_dict)
 
+    # Set runtime
+    report.total_time_seconds = time.time() - start_time
+
     if report.total_artifacts_found > 0:
         # Create component-specific filename
         safe_name = component_name.replace(' ', '_')
         timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
         output_file = output_dir / f"{safe_name}_validation_report_{timestamp}.xlsx"
 
-        # Generate report with custom filename
+        # Generate report with custom filename, skip component type sheets since this is per-component
         from Reports import generate_excel_report as _gen_report
-        result = _gen_report(report, output_dir)
+        result = _gen_report(report, output_dir, skip_component_type_sheets=True)
 
         # Rename to component-specific name if successful
         if result:
