@@ -84,8 +84,10 @@
         "_comment": "Expected path structure by component_name. Variables in {brackets} can have allowed values defined. Use _contains suffix for partial matching.",
         "enabled": true,
         "vVeh_LCO": {
-            "expected_structure": "{Project}/{SoftwareLine}/Model/{SimulationType}/.../{artifact}",
-            "SimulationType": ["HiL"]
+            "expected_structure": "{Project}/{SoftwareLine}/Model/{SimulationType}/{CSP_SWB}/{LabcarType}/.../{artifact}",
+            "SimulationType": ["HiL"],
+            "CSP_SWB_contains": ["CSP", "SWB"],
+            "LabcarType": ["VME", "PCIe"]
         },
         "test_ECU-TEST": {
             "expected_structure": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}",
