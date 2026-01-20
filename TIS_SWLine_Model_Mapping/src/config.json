@@ -89,15 +89,14 @@
     },
 
     "path_convention": {
-        "_comment": "Expected path structure by component_name. See README for adding more patterns.",
+        "_comment": "Expected path structure by component_name. Variables in {brackets} can have allowed values defined.",
         "enabled": true,
-        "expected_structure": {
-            "vVeh_LCO": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
-            "test_ECU-TEST": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}"
+        "vVeh_LCO": {
+            "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}"
         },
-        "subfolder_under_SoftwareLines": {
-            "vVeh_LCO": ["Model", "SiL", "vVeh"],
-            "test_ECU-TEST": ["Test"]
+        "test_ECU-TEST": {
+            "expected_structure": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}",
+            "TestType": ["BFT", "SIT", "UIT", "SWT", "HIT"]
         }
     },
 

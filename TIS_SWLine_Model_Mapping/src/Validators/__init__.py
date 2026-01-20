@@ -20,8 +20,7 @@ from Models import DeviationType
 
 from config import (
     PATH_CONVENTION_ENABLED,
-    PATH_EXPECTED_STRUCTURE,
-    PATH_SUBFOLDERS,
+    PATH_CONVENTIONS,
     PATH_VALID_SUBFOLDERS_HIL,
     NAMING_CONVENTION_ENABLED,
     NAMING_CONVENTION_PATTERNS,
@@ -88,12 +87,23 @@ class PathValidator:
             return (
                 DeviationType.WRONG_LOCATION,
                 "Path too short",
-                "[Project]/[SWLine]/Model/HiL|SiL/[subfolder]/..."
+                "[Project]/[SWLine]/..."
             )
 
         project = path_parts[0]
         sw_line = path_parts[1] if len(path_parts) > 1 else "Unknown"
 
+        # Get component-specific path convention
+        convention = self._get_path_convention(component_name)
+        expected_structure = convention.get("expected_structure", "") if convention else ""
+
+        # Validate based on expected structure
+        if expected_structure:
+            return self._validate_against_structure(
+                path_parts, project, sw_line, expected_structure, convention, component_name
+            )
+
+        # Fallback: generic Model/HiL|SiL validation for unknown components
         if 'Model' not in path_parts:
             return (
                 DeviationType.MISSING_MODEL,
@@ -107,9 +117,6 @@ class PathValidator:
         is_hil_path = 'HiL' in remaining
         is_sil_path = 'SiL' in remaining
 
-        expected_structure = self._get_expected_structure(component_name)
-        expected_subfolders = self._get_expected_subfolders(component_name)
-
         if not is_hil_path and not is_sil_path:
             if remaining and any(sf in remaining[0] for sf in PATH_VALID_SUBFOLDERS_HIL):
                 return (
@@ -120,24 +127,102 @@ class PathValidator:
             return (
                 DeviationType.MISSING_HIL,
                 "Missing 'HiL' or 'SiL' folder after Model",
-                expected_structure or f"{project}/{sw_line}/Model/HiL|SiL/[subfolder]/..."
+                f"{project}/{sw_line}/Model/HiL|SiL/[subfolder]/..."
             )
 
         if is_hil_path:
             result = self._validate_hil_path(
-                remaining, project, sw_line, expected_structure, expected_subfolders
+                remaining, project, sw_line, expected_structure, []
             )
             if result[0] != DeviationType.VALID:
                 return result
 
         if is_sil_path:
             result = self._validate_sil_path(
-                remaining, project, sw_line, expected_structure, expected_subfolders
+                remaining, project, sw_line, expected_structure, []
             )
             if result[0] != DeviationType.VALID:
                 return result
 
         return (DeviationType.VALID, "", "")
+
+    def _validate_against_structure(
+        self,
+        path_parts: List[str],
+        project: str,
+        sw_line: str,
+        expected_structure: str,
+        convention: Dict,
+        component_name: str
+    ) -> Tuple[DeviationType, str, str]:
+        """Validate path against expected structure with variable substitution."""
+        # Parse expected structure to get required folders
+        # Format: {Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}
+        # or: {Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}
+
+        structure_parts = expected_structure.split('/')
+        # Skip {Project}, {SoftwareLine}, ..., {artifact} placeholders
+        required_folders = []
+        variables_in_path = {}
+
+        for i, part in enumerate(structure_parts):
+            if part.startswith('{') and part.endswith('}'):
+                var_name = part[1:-1]
+                if var_name not in ('Project', 'SoftwareLine', 'artifact', '...'):
+                    # This is a variable like {TestType}
+                    variables_in_path[i] = var_name
+            elif part != '...':
+                required_folders.append(part)
+
+        # Check required folders exist in path
+        for folder in required_folders:
+            if folder not in path_parts:
+                return (
+                    DeviationType.WRONG_LOCATION,
+                    f"Missing required folder '{folder}' in path",
+                    expected_structure
+                )
+
+        # Validate variables have allowed values
+        for var_name in variables_in_path.values():
+            allowed_values = convention.get(var_name, [])
+            if allowed_values:
+                # Find the actual value in the path
+                actual_value = self._find_variable_value_in_path(
+                    path_parts, required_folders, var_name, structure_parts
+                )
+                if actual_value and actual_value not in allowed_values:
+                    return (
+                        DeviationType.INVALID_SUBFOLDER,
+                        f"Invalid {var_name} '{actual_value}' (allowed: {', '.join(allowed_values)})",
+                        expected_structure
+                    )
+
+        return (DeviationType.VALID, "", "")
+
+    def _find_variable_value_in_path(
+        self,
+        path_parts: List[str],
+        required_folders: List[str],
+        var_name: str,
+        structure_parts: List[str]
+    ) -> Optional[str]:
+        """Find the actual value of a variable in the path based on structure position."""
+        # Find position of variable in structure (after last required folder before it)
+        for i, part in enumerate(structure_parts):
+            if part == f'{{{var_name}}}':
+                # Find the folder before this variable in structure
+                prev_folder = None
+                for j in range(i - 1, -1, -1):
+                    if not structure_parts[j].startswith('{') and structure_parts[j] != '...':
+                        prev_folder = structure_parts[j]
+                        break
+
+                if prev_folder and prev_folder in path_parts:
+                    prev_index = path_parts.index(prev_folder)
+                    if prev_index + 1 < len(path_parts):
+                        return path_parts[prev_index + 1]
+        return None
 
     def _validate_hil_path(
         self,
@@ -207,40 +292,35 @@ class PathValidator:
 
         return (DeviationType.VALID, "", "")
 
-    def _get_expected_subfolders(self, component_name: str) -> List[str]:
-        """Get expected subfolders under software line for a component_name."""
+    def _get_path_convention(self, component_name: str) -> Optional[Dict]:
+        """Get path convention config for a component_name."""
         if not component_name:
-            return []
+            return None
 
-        if component_name in PATH_SUBFOLDERS:
-            return PATH_SUBFOLDERS[component_name]
+        # Direct match
+        if component_name in PATH_CONVENTIONS:
+            return PATH_CONVENTIONS[component_name]
 
-        for pattern, subfolders in PATH_SUBFOLDERS.items():
-            if pattern.startswith('_comment'):
-                continue
+        # Prefix match
+        for pattern, config in PATH_CONVENTIONS.items():
             if component_name.startswith(pattern):
-                return subfolders
+                return config
 
-        if 'MDL' in component_name and 'SiL' not in component_name:
-            return PATH_VALID_SUBFOLDERS_HIL
+        return None
 
-        return []
+    def _get_allowed_values(self, component_name: str, variable_name: str) -> List[str]:
+        """Get allowed values for a variable in the path convention."""
+        convention = self._get_path_convention(component_name)
+        if not convention:
+            return []
+        return convention.get(variable_name, [])
 
     def _get_expected_structure(self, component_name: str) -> str:
         """Get expected path structure for a component_name."""
-        if not component_name:
+        convention = self._get_path_convention(component_name)
+        if not convention:
             return ""
-
-        if component_name in PATH_EXPECTED_STRUCTURE:
-            return PATH_EXPECTED_STRUCTURE[component_name]
-
-        for pattern, structure in PATH_EXPECTED_STRUCTURE.items():
-            if pattern.startswith('_comment'):
-                continue
-            if component_name.startswith(pattern):
-                return structure
-
-        return ""
+        return convention.get("expected_structure", "")
 
     def validate_naming_convention(
         self,

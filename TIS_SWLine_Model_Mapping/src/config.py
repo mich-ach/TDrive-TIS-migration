@@ -146,11 +146,14 @@ NAMING_CONVENTION_PATTERNS = _config.get("naming_convention", {}).get("patterns"
 
 PATH_CONVENTION_ENABLED = _config.get("path_convention", {}).get("enabled", False)
 PATH_CONVENTION_CONFIG = _config.get("path_convention", {})
-LABCAR_PLATFORMS = PATH_CONVENTION_CONFIG.get("labcar_platforms", ["VME", "PCIe"])
 
-# Expected structure and subfolders per component_name
-PATH_EXPECTED_STRUCTURE = PATH_CONVENTION_CONFIG.get("expected_structure", {})
-PATH_SUBFOLDERS = PATH_CONVENTION_CONFIG.get("subfolder_under_SoftwareLines", {})
+# Parse component-specific path conventions
+# New structure: each component_name has its own dict with expected_structure and variable values
+PATH_CONVENTIONS: Dict[str, Dict] = {}
+for key, value in PATH_CONVENTION_CONFIG.items():
+    if key.startswith('_') or key == 'enabled' or not isinstance(value, dict):
+        continue
+    PATH_CONVENTIONS[key] = value
 
 # Legacy compatibility - default HIL subfolders
 PATH_VALID_SUBFOLDERS_HIL = ["CSP", "SWB"]
