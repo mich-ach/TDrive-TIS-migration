@@ -21,7 +21,7 @@ src_dir = script_dir.parent
 sys.path.insert(0, str(src_dir))
 
 from Api import TISClient
-from config import ROOT_PROJECT_ID
+from config import VW_XCU_PROJECT_ID
 
 
 def find_test_type_folders(component: Dict[str, Any], results: Dict[str, Set[str]], path: List[str] = None) -> None:
@@ -62,11 +62,11 @@ def discover_test_types_from_api(children_level: int = 6) -> Dict[str, Set[str]]
         Dict mapping folder_name -> Set of example paths
     """
     print(f"Fetching TIS data (children_level={children_level})...")
-    print(f"Root project ID: {ROOT_PROJECT_ID}")
+    print(f"Root project ID: {VW_XCU_PROJECT_ID}")
 
     client = TISClient(children_level=children_level)
     data, timed_out, elapsed = client.get_component(
-        ROOT_PROJECT_ID,
+        VW_XCU_PROJECT_ID,
         children_level=children_level,
         use_cache=False
     )

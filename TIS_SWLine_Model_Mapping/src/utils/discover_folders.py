@@ -26,7 +26,7 @@ src_dir = script_dir.parent
 sys.path.insert(0, str(src_dir))
 
 from Api import TISClient
-from config import ROOT_PROJECT_ID
+from config import VW_XCU_PROJECT_ID
 
 
 def find_folders_under_parent(
@@ -73,12 +73,12 @@ def discover_folders_from_api(parent_folder: str, children_level: int = 6) -> Di
         Dict mapping folder_name -> Set of example paths
     """
     print(f"Fetching TIS data (children_level={children_level})...")
-    print(f"Root project ID: {ROOT_PROJECT_ID}")
+    print(f"Root project ID: {VW_XCU_PROJECT_ID}")
     print(f"Looking for folders under: {parent_folder}/")
 
     client = TISClient(children_level=children_level)
     data, timed_out, elapsed = client.get_component(
-        ROOT_PROJECT_ID,
+        VW_XCU_PROJECT_ID,
         children_level=children_level,
         use_cache=False
     )
