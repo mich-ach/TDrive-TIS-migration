@@ -68,14 +68,14 @@
         "enabled": true,
         "patterns": {
             "vVeh_LCO": {
-                "description": "vVeh_LCO artifact: [timestamp -] VW vVeh_LCO : <SW> / <PVER> [<dataset>] <variant>",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_LCO\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
-                "example": "VW vVeh_LCO : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
+                "description": "vVeh_LCO artifact: [timestamp -] VW MDL : <Project> / <Subversion> [; <id>]",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\s;]+)(?:\\s*;\\s*(?P<id>\\d+))?$",
+                "example": "VW MDL : ProjectSubversion / Subversion ; 220324"
             },
             "test_ECU-TEST": {
-                "description": "ECU-TEST test artifact: <Project>_<TestType>_<Description>",
-                "pattern": "^(?P<project>[A-Za-z0-9_]+)_(?P<test_type>BFT|SIT|UIT|SWT|HIT)_(?P<description>.+)$",
-                "example": "MG1CS211_BFT_DiagnosticTests"
+                "description": "test_ECU-TEST artifact: [timestamp -] VW TST : <Project>/ <Subversion> [<TestName>] [; <id>]",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+TST\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\[]+?)\\s*\\[(?P<testname>[^\\]]*)\\](?:\\s*;\\s*(?P<id>\\d+))?$",
+                "example": "VW TST : Project1234/ P69 [TestName] ; 132019"
             }
         }
     },
