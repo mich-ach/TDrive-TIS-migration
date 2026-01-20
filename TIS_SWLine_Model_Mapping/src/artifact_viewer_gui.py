@@ -50,6 +50,98 @@ except ImportError:
     OUTPUT_DIR = Path(__file__).parent.parent / "output"
 
 
+# Column definitions per artifact type (component_type)
+# Format: (key, header, min_width, weight, data_key)
+# Common columns shared by all artifact types
+COMMON_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    ("user", "User", 70, 0, "user"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
+    ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# Columns specific to vVeh_LCO artifacts
+VVEH_LCO_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    ("simulation_type", "Simulation Type", 70, 0, "simulation_type"),
+    ("software_type", "Software Type", 60, 0, "software_type"),
+    ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
+    ("user", "User", 70, 0, "user"),
+    ("lco_version", "LCO Version", 80, 1, "lco_version"),
+    ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
+    ("is_genuine_build", "Is Genuine Build", 55, 0, "is_genuine_build"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("release_date_time", "Release Date Time", 90, 0, "release_date_time"),
+    ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
+    ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
+    ("build_type", "Build Type", 60, 0, "build_type"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# Columns specific to test_ECU-TEST artifacts
+TEST_ECU_TEST_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    ("test_type", "Test Type", 60, 0, "test_type"),
+    ("test_version", "Test Version", 70, 0, "test_version"),
+    ("ecu_test_version", "ECU-TEST Version", 80, 0, "ecu_test_version"),
+    ("user", "User", 70, 0, "user"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
+    ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# All columns combined (for "All" filter or unknown types)
+ALL_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    ("simulation_type", "Simulation Type", 70, 0, "simulation_type"),
+    ("software_type", "Software Type", 60, 0, "software_type"),
+    ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
+    ("test_type", "Test Type", 60, 0, "test_type"),
+    ("test_version", "Test Version", 70, 0, "test_version"),
+    ("ecu_test_version", "ECU-TEST Version", 80, 0, "ecu_test_version"),
+    ("user", "User", 70, 0, "user"),
+    ("lco_version", "LCO Version", 80, 1, "lco_version"),
+    ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
+    ("is_genuine_build", "Is Genuine Build", 55, 0, "is_genuine_build"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("release_date_time", "Release Date Time", 90, 0, "release_date_time"),
+    ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
+    ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
+    ("build_type", "Build Type", 60, 0, "build_type"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# Mapping of component_type to column definitions
+COMPONENT_COLUMNS = {
+    "vVeh_LCO": VVEH_LCO_COLUMNS,
+    "test_ECU-TEST": TEST_ECU_TEST_COLUMNS,
+    # Add more component types as needed
+}
+
+
 class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
     """Main frame for TIS Artifact Viewer."""
 
@@ -68,34 +160,8 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         self.sort_column: int = -1  # -1 = no sort
         self.sort_ascending: bool = True
 
-        # Column definitions: (key, header, min_width, weight, data_key)
-        # weight determines how much of extra space the column gets
-        # data_key is the artifact dict key to use for this column
-        # All columns from JSON data with proper naming
-        self.columns = [
-            ("project", "Project", 120, 1, "_project"),
-            ("sw_line", "Software Line", 120, 1, "_sw_line"),
-            ("name", "Name", 180, 3, "name"),
-            ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
-            ("created_date", "Created Date", 90, 0, "created_date"),
-            ("component_type", "Component Type", 75, 1, "component_type"),
-            ("simulation_type", "Simulation Type", 70, 0, "simulation_type"),
-            ("software_type", "Software Type", 60, 0, "software_type"),
-            ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
-            ("test_type", "Test Type", 60, 0, "test_type"),
-            ("test_version", "Test Version", 70, 0, "test_version"),
-            ("ecu_test_version", "ECU-TEST Version", 80, 0, "ecu_test_version"),
-            ("user", "User", 70, 0, "user"),
-            ("lco_version", "LCO Version", 80, 1, "lco_version"),
-            ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
-            ("is_genuine_build", "Is Genuine Build", 55, 0, "is_genuine_build"),
-            ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
-            ("release_date_time", "Release Date Time", 90, 0, "release_date_time"),
-            ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
-            ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
-            ("build_type", "Build Type", 60, 0, "build_type"),
-            ("upload_path", "Upload Path", 200, 3, "upload_path"),
-        ]
+        # Column definitions - use ALL_COLUMNS as default (dynamic based on component_type)
+        self.columns = list(ALL_COLUMNS)
 
         # Track visible columns (non-empty ones) - must be after self.columns is defined
         self.visible_columns: List[int] = list(range(len(self.columns)))
@@ -140,30 +206,32 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         filter_box = wx.StaticBox(self.panel, label="Filters (click column headers to sort)")
         filter_sizer = wx.StaticBoxSizer(filter_box, wx.VERTICAL)
 
-        # Row 1: Filter dropdowns
+        # Row 1: Component type first (defines artifact type), then project/sw_line
         row1 = wx.BoxSizer(wx.HORIZONTAL)
+        self._add_filter(row1, "component_type", "Artifact Type:", 140, is_component_type=True)
         self._add_filter(row1, "project", "Project:", 140)
         self._add_filter(row1, "sw_line", "SW Line:", 180)
-        self._add_filter(row1, "component_type", "Component:", 120)
-        self._add_filter(row1, "simulation_type", "Simulation:", 120)
-        self._add_filter(row1, "software_type", "SW Type:", 180)
-        self._add_filter(row1, "labcar_type", "Labcar:", 120)
+        self._add_filter(row1, "life_cycle_status", "Status:", 100)
+        self._add_filter(row1, "user", "User:", 100)
         filter_sizer.Add(row1, 0, wx.EXPAND | wx.ALL, 2)
 
-        # Row 2: More filters
+        # Row 2: Type-specific filters (will be shown/hidden based on component_type)
         row2 = wx.BoxSizer(wx.HORIZONTAL)
-        self._add_filter(row2, "life_cycle_status", "Status:", 100)
-        self._add_filter(row2, "user", "User:", 100)
+        self._add_filter(row2, "simulation_type", "Simulation:", 100)
+        self._add_filter(row2, "software_type", "SW Type:", 120)
+        self._add_filter(row2, "labcar_type", "Labcar:", 100)
         self._add_filter(row2, "test_type", "Test Type:", 80)
-        self._add_filter(row2, "lco_version", "LCO:", 180)
-        self._add_filter(row2, "vemox_version", "VeMoX:", 180)
-        self._add_filter(row2, "build_type", "Build Type:", 100)
+        self._add_filter(row2, "test_version", "Test Ver:", 80)
+        self._add_filter(row2, "ecu_test_version", "ECU-TEST:", 100)
+        self._add_filter(row2, "lco_version", "LCO:", 150)
+        self._add_filter(row2, "vemox_version", "VeMoX:", 150)
         filter_sizer.Add(row2, 0, wx.EXPAND | wx.ALL, 2)
 
-        # Row 3: Boolean filters and search
+        # Row 3: Boolean filters, build type, and search
         row3 = wx.BoxSizer(wx.HORIZONTAL)
         self._add_filter(row3, "is_deleted", "Deleted:", 70)
         self._add_filter(row3, "is_genuine_build", "Genuine:", 70)
+        self._add_filter(row3, "build_type", "Build:", 80)
         row3.Add(wx.StaticText(self.panel, label="Search:"), 0,
                  wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 10)
         self.search_ctrl = wx.TextCtrl(self.panel, size=(150, -1))
@@ -227,7 +295,7 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         wx.CallAfter(self._adjust_column_widths_visible, self.visible_columns)
 
     def _add_filter(self, sizer: Any, key: str, label: str, width: int,
-                    choices: Optional[List[str]] = None):
+                    choices: Optional[List[str]] = None, is_component_type: bool = False):
         """Add a filter combo box."""
         sizer.Add(wx.StaticText(self.panel, label=label), 0,
                   wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
@@ -238,7 +306,13 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         combo = wx.ComboBox(self.panel, choices=choices, style=wx.CB_READONLY,
                            size=(width, -1))
         combo.SetSelection(0)
-        combo.Bind(wx.EVT_COMBOBOX, self._on_filter_changed)
+
+        # Component type filter gets special handling to update columns
+        if is_component_type:
+            combo.Bind(wx.EVT_COMBOBOX, self._on_component_type_changed)
+        else:
+            combo.Bind(wx.EVT_COMBOBOX, self._on_filter_changed)
+
         sizer.Add(combo, 0, wx.ALL, 2)
         self.filter_combos[key] = combo
 
@@ -328,6 +402,44 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         self.sort_label.SetLabel("")
         self._apply_filters()
 
+    def _on_component_type_changed(self, event: Any):
+        """Handle component type filter change - update columns dynamically."""
+        selected = self.filter_combos["component_type"].GetStringSelection()
+
+        # Get columns for selected component type
+        if selected == "All" or selected not in COMPONENT_COLUMNS:
+            new_columns = list(ALL_COLUMNS)
+        else:
+            new_columns = list(COMPONENT_COLUMNS[selected])
+
+        # Only rebuild if columns actually changed
+        if new_columns != self.columns:
+            self._rebuild_columns(new_columns)
+
+        # Reset sort when changing component type
+        self.sort_column = -1
+        self.sort_ascending = True
+        self.sort_label.SetLabel("")
+
+        # Apply filters (this also handles the component_type filter)
+        self._apply_filters()
+
+    def _rebuild_columns(self, new_columns: List):
+        """Rebuild list control columns with new column definitions."""
+        self.columns = new_columns
+        self.visible_columns = list(range(len(self.columns)))
+
+        # Delete all existing columns
+        self.list_ctrl.DeleteAllItems()
+        self.list_ctrl.DeleteAllColumns()
+
+        # Add new columns
+        for i, (key, header, min_width, weight, data_key) in enumerate(self.columns):
+            self.list_ctrl.InsertColumn(i, header, width=min_width)
+
+        # Adjust widths
+        wx.CallAfter(self._adjust_column_widths_visible, self.visible_columns)
+
     def _on_open_file(self, event):
         """Open file dialog."""
         initial_dir = str(OUTPUT_DIR) if OUTPUT_DIR.exists() else str(Path.home())
@@ -344,7 +456,7 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         dlg.Destroy()
 
     def _on_open_latest(self, event):
-        """Open most recent output file."""
+        """Open most recent output file - shows dialog to choose artifact type if multiple."""
         if not OUTPUT_DIR.exists():
             wx.MessageBox(f"Output directory not found:\n{OUTPUT_DIR}",
                          "Warning", wx.OK | wx.ICON_WARNING)
@@ -355,11 +467,29 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             wx.MessageBox("No output runs found.", "Info", wx.OK | wx.ICON_INFORMATION)
             return
 
+        # Find all artifact files in the most recent run
         for run_dir in run_dirs:
-            json_files = list(run_dir.glob("vveh_lco_artifacts_*.json"))
+            json_files = list(run_dir.glob("*_artifacts_*.json"))
+            # Exclude 'latest_' prefixed files
+            json_files = [f for f in json_files if not f.name.startswith("latest_")]
+
             if json_files:
-                latest_file = max(json_files, key=lambda x: x.stat().st_mtime)
-                self._load_file(latest_file)
+                if len(json_files) == 1:
+                    # Only one file, load it directly
+                    self._load_file(json_files[0])
+                else:
+                    # Multiple files, let user choose
+                    choices = [f.name for f in json_files]
+                    dlg = wx.SingleChoiceDialog(
+                        self,
+                        f"Multiple artifact files found in {run_dir.name}.\nSelect file to open:",
+                        "Select Artifact File",
+                        choices
+                    )
+                    if dlg.ShowModal() == wx.ID_OK:
+                        selected_idx = dlg.GetSelection()
+                        self._load_file(json_files[selected_idx])
+                    dlg.Destroy()
                 return
 
         wx.MessageBox("No artifact JSON files found.", "Info", wx.OK | wx.ICON_INFORMATION)
@@ -600,6 +730,8 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             'software_type': set(),
             'labcar_type': set(),
             'test_type': set(),
+            'test_version': set(),
+            'ecu_test_version': set(),
             'lco_version': set(),
             'vemox_version': set(),
             'build_type': set(),
@@ -631,6 +763,10 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
                 unique_values['labcar_type'].add(str(artifact['labcar_type']))
             if artifact.get('test_type'):
                 unique_values['test_type'].add(str(artifact['test_type']))
+            if artifact.get('test_version'):
+                unique_values['test_version'].add(str(artifact['test_version']))
+            if artifact.get('ecu_test_version'):
+                unique_values['ecu_test_version'].add(str(artifact['ecu_test_version']))
             if artifact.get('lco_version'):
                 unique_values['lco_version'].add(str(artifact['lco_version']))
             if artifact.get('vemox_version'):
@@ -753,6 +889,14 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
 
             if filters.get('test_type', 'All') != "All":
                 if str(artifact.get('test_type', '') or '') != filters['test_type']:
+                    continue
+
+            if filters.get('test_version', 'All') != "All":
+                if str(artifact.get('test_version', '') or '') != filters['test_version']:
+                    continue
+
+            if filters.get('ecu_test_version', 'All') != "All":
+                if str(artifact.get('ecu_test_version', '') or '') != filters['ecu_test_version']:
                     continue
 
             if filters.get('lco_version', 'All') != "All":
