@@ -73,8 +73,8 @@
                 "example": "VW MDL : ProjectSubversion / Subversion ; 220324"
             },
             "test_ECU-TEST": {
-                "description": "test_ECU-TEST artifact: [timestamp -] VW TST : <Project>/ <Subversion> [<TestName>] [; <id>]",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+TST\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\[]+?)\\s*\\[(?P<testname>[^\\]]*)\\](?:\\s*;\\s*(?P<id>\\d+))?$",
+                "description": "test_ECU-TEST artifact: [timestamp -] VW TST : <TestName> [; <id>]",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+TST\\s*:\\s*(?P<testname>.+?)(?:\\s*;\\s*(?P<id>[a-zA-Z0-9]+))?$",
                 "example": "VW TST : Project1234/ P69 [TestName] ; 132019"
             }
         }
