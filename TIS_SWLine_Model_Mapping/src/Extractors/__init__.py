@@ -29,7 +29,6 @@ from config import (
     JSON_OUTPUT_PREFIX,
     LATEST_JSON_PREFIX,
     VW_XCU_PROJECT_ID,
-    PATH_VALID_SUBFOLDERS_HIL,
     PATH_CONVENTIONS,
     COMPONENT_TYPE_FILTER,
     COMPONENT_NAME_FILTER,
@@ -328,10 +327,11 @@ class ArtifactExtractor:
 
     def _extract_software_type(self, path: str) -> Optional[str]:
         """Extract software type (CSP/SWB) from path."""
+        csp_swb_patterns = PATH_CONVENTIONS.get("vVeh_LCO", {}).get("CSP_SWB_contains", [])
         path_parts = path.split('/')
         for part in path_parts:
-            for subfolder in PATH_VALID_SUBFOLDERS_HIL:
-                if subfolder in part:
+            for pattern in csp_swb_patterns:
+                if pattern in part:
                     return part
         return None
 

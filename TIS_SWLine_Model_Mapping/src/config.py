@@ -155,9 +155,6 @@ for key, value in PATH_CONVENTION_CONFIG.items():
         continue
     PATH_CONVENTIONS[key] = value
 
-# Legacy compatibility - default HIL subfolders
-PATH_VALID_SUBFOLDERS_HIL = ["CSP", "SWB"]
-
 # =============================================================================
 # COMPUTED VALUES (not in config.json)
 # =============================================================================

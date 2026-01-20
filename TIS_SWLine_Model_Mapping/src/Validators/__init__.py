@@ -21,15 +21,15 @@ from Models import DeviationType
 from config import (
     PATH_CONVENTION_ENABLED,
     PATH_CONVENTIONS,
-    PATH_VALID_SUBFOLDERS_HIL,
     NAMING_CONVENTION_ENABLED,
     NAMING_CONVENTION_PATTERNS,
 )
 
 logger = logging.getLogger(__name__)
 
-# Expected path patterns
-CSP_SWB_PATTERN = re.compile(r"(CSP|SWB)", re.IGNORECASE)
+# Get CSP/SWB patterns from path convention (fallback to defaults)
+CSP_SWB_SUBFOLDERS = PATH_CONVENTIONS.get("vVeh_LCO", {}).get("CSP_SWB_contains", ["CSP", "SWB"])
+CSP_SWB_PATTERN = re.compile(r"(" + "|".join(CSP_SWB_SUBFOLDERS) + ")", re.IGNORECASE)
 
 
 class PathValidator:
@@ -118,7 +118,7 @@ class PathValidator:
         is_sil_path = 'SiL' in remaining
 
         if not is_hil_path and not is_sil_path:
-            if remaining and any(sf in remaining[0] for sf in PATH_VALID_SUBFOLDERS_HIL):
+            if remaining and any(sf in remaining[0] for sf in CSP_SWB_SUBFOLDERS):
                 return (
                     DeviationType.CSP_SWB_UNDER_MODEL,
                     f"{remaining[0]} directly under Model (missing HiL)",
@@ -261,7 +261,7 @@ class PathValidator:
             )
 
         first_after_hil = after_hil[0]
-        check_subfolders = expected_subfolders if expected_subfolders else PATH_VALID_SUBFOLDERS_HIL
+        check_subfolders = expected_subfolders if expected_subfolders else CSP_SWB_SUBFOLDERS
         is_valid_subfolder = any(
             sf.lower() in first_after_hil.lower()
             for sf in check_subfolders
