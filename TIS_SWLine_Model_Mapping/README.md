@@ -163,21 +163,24 @@ Define regex patterns for artifact name validation using **component_name** as k
 
 ### Path Convention
 
-Define expected path structures using **component_name** as key:
+Define expected path structures using **component_name** as key. Each component has its own definition with the expected structure and any variable values:
 
 ```json
 "path_convention": {
     "enabled": true,
-    "expected_structure": {
-        "vVeh_LCO": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
-        "test_ECU-TEST": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}"
+    "vVeh_LCO": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}"
     },
-    "subfolder_under_SoftwareLines": {
-        "vVeh_LCO": ["Model", "SiL", "vVeh"],
-        "test_ECU-TEST": ["Test"]
+    "test_ECU-TEST": {
+        "expected_structure": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}",
+        "TestType": ["BFT", "SIT", "UIT", "SWT", "HIT"]
     }
 }
 ```
+
+- Variables in `{brackets}` are placeholders (e.g., `{TestType}`)
+- If a variable has allowed values, define them as a list (e.g., `"TestType": ["BFT", ...]`)
+- `{Project}`, `{SoftwareLine}`, `{artifact}`, and `...` are special placeholders
 
 ## Usage
 
@@ -325,16 +328,16 @@ Add expected path structure using **component_name** as the key:
 
 ```json
 "path_convention": {
-    "expected_structure": {
-        "myNewType_Name": "{Project}/{SoftwareLine}/CustomFolder/.../{artifact}"
-    },
-    "subfolder_under_SoftwareLines": {
-        "myNewType_Name": ["CustomFolder", "Subfolder"]
+    "myNewType_Name": {
+        "expected_structure": "{Project}/{SoftwareLine}/CustomFolder/{VariablePart}/.../{artifact}",
+        "VariablePart": ["Option1", "Option2", "Option3"]
     }
 }
 ```
 
-The `subfolder_under_SoftwareLines` defines the expected folder hierarchy under the software line (e.g., `["Model", "SiL", "vVeh"]` means the path should contain `Model/SiL/vVeh/`).
+- The `expected_structure` defines required folders in the path
+- Variables like `{VariablePart}` can have allowed values defined as lists
+- The validator checks that required folders exist and variable values are valid
 
 ### Reference: Additional Convention Patterns
 
@@ -383,33 +386,43 @@ Below are example patterns for other artifact types that can be added:
 
 ```json
 "path_convention": {
-    "expected_structure": {
-        "MDL": "{Project}/{SoftwareLine}/Model/HiL/{CSP|SWB}/.../{artifact}",
-        "MDL_HiL_PCIe": "{Project}/{SoftwareLine}/Model/HiL/{CSP|SWB}/.../{artifact}",
-        "MDL_HiL_VME": "{Project}/{SoftwareLine}/Model/HiL/{CSP|SWB}/.../{artifact}",
-        "MDL_SiL": "{Project}/{SoftwareLine}/Model/SiL/{Flexray|Plant|SubCAN|vEL}/.../{artifact}",
-        "SetupSkeleton_Silver": "{Project}/{SoftwareLine}/Model/SiL/SetupSkeleton_Silver/.../{artifact}",
-        "SetupSkeleton_FMU": "{Project}/{SoftwareLine}/Model/SiL/SetupSkeleton/.../{artifact}",
-        "vVehFrame_Silver": "{Project}/{SoftwareLine}/Model/SiL/vVehFrame_Silver/.../{artifact}",
-        "vVehFrame_FMU": "{Project}/{SoftwareLine}/Model/SiL/vVehFrame/.../{artifact}",
-        "vVeh_Silver": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
-        "vVeh_FMU": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
-        "vXCU_Silver": "{Project}/{SoftwareLine}/Model/SiL/vXCU/.../{artifact}",
-        "XCUSW_Hex": "{Project}/{SoftwareLine}/Model/SiL/XCUSW/.../{artifact}"
+    "MDL": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/{Platform}/.../{artifact}",
+        "Platform": ["CSP", "SWB"]
     },
-    "subfolder_under_SoftwareLines": {
-        "MDL": ["Model", "HiL", "CSP"],
-        "MDL_HiL_PCIe": ["Model", "HiL", "CSP"],
-        "MDL_HiL_VME": ["Model", "HiL", "SWB"],
-        "MDL_SiL": ["Model", "SiL", "Flexray"],
-        "SetupSkeleton_Silver": ["Model", "SiL", "SetupSkeleton_Silver"],
-        "SetupSkeleton_FMU": ["Model", "SiL", "SetupSkeleton"],
-        "vVehFrame_Silver": ["Model", "SiL", "vVehFrame_Silver"],
-        "vVehFrame_FMU": ["Model", "SiL", "vVehFrame"],
-        "vVeh_Silver": ["Model", "SiL", "vVeh"],
-        "vVeh_FMU": ["Model", "SiL", "vVeh"],
-        "vXCU_Silver": ["Model", "SiL", "vXCU"],
-        "XCUSW_Hex": ["Model", "SiL", "XCUSW"]
+    "MDL_HiL_PCIe": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/CSP/.../{artifact}"
+    },
+    "MDL_HiL_VME": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/SWB/.../{artifact}"
+    },
+    "MDL_SiL": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/{SiLType}/.../{artifact}",
+        "SiLType": ["Flexray", "Plant", "SubCAN", "vEL"]
+    },
+    "SetupSkeleton_Silver": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/SetupSkeleton_Silver/.../{artifact}"
+    },
+    "SetupSkeleton_FMU": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/SetupSkeleton/.../{artifact}"
+    },
+    "vVehFrame_Silver": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVehFrame_Silver/.../{artifact}"
+    },
+    "vVehFrame_FMU": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVehFrame/.../{artifact}"
+    },
+    "vVeh_Silver": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}"
+    },
+    "vVeh_FMU": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}"
+    },
+    "vXCU_Silver": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vXCU/.../{artifact}"
+    },
+    "XCUSW_Hex": {
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/XCUSW/.../{artifact}"
     }
 }
 ```
