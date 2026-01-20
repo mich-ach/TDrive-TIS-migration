@@ -158,9 +158,6 @@ for key, value in PATH_CONVENTION_CONFIG.items():
 # Legacy compatibility - default HIL subfolders
 PATH_VALID_SUBFOLDERS_HIL = ["CSP", "SWB"]
 
-# Labcar platforms (from vVeh_LCO path convention or default)
-LABCAR_PLATFORMS = PATH_CONVENTIONS.get("vVeh_LCO", {}).get("LabcarType", ["VME", "PCIe"])
-
 # =============================================================================
 # COMPUTED VALUES (not in config.json)
 # =============================================================================

@@ -30,7 +30,7 @@ from config import (
     LATEST_JSON_PREFIX,
     VW_XCU_PROJECT_ID,
     PATH_VALID_SUBFOLDERS_HIL,
-    LABCAR_PLATFORMS,
+    PATH_CONVENTIONS,
     COMPONENT_TYPE_FILTER,
     COMPONENT_NAME_FILTER,
     COMPONENT_GRP_FILTER,
@@ -337,9 +337,10 @@ class ArtifactExtractor:
 
     def _extract_labcar_type(self, path: str) -> Optional[str]:
         """Extract labcar type (VME/PCIe) from path."""
+        labcar_types = PATH_CONVENTIONS.get("vVeh_LCO", {}).get("LabcarType", [])
         path_parts = path.split('/')
         for part in path_parts:
-            if part in LABCAR_PLATFORMS:
+            if part in labcar_types:
                 return part
         return None
 
