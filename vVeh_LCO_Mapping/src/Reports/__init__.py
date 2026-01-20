@@ -190,7 +190,7 @@ def _create_deviations_sheet(wb, report, header_font_white, header_fill, thin_bo
     ws_deviations = wb.create_sheet("All Deviations")
 
     deviation_headers = [
-        "Path", "Deviation Type", "Uploader", "Details",
+        "Path", "Artifact Name", "Deviation Type", "Uploader", "Details",
         "Expected Path", "Component ID", "TIS Link"
     ]
 
@@ -202,14 +202,15 @@ def _create_deviations_sheet(wb, report, header_font_white, header_fill, thin_bo
 
     for row_idx, dev in enumerate(report.deviations, 2):
         ws_deviations.cell(row=row_idx, column=1, value=dev['path']).border = thin_border
-        ws_deviations.cell(row=row_idx, column=2, value=dev['deviation_type']).border = thin_border
-        ws_deviations.cell(row=row_idx, column=3, value=dev.get('user', 'UNKNOWN')).border = thin_border
-        ws_deviations.cell(row=row_idx, column=4, value=dev.get('deviation_details', '')).border = thin_border
-        ws_deviations.cell(row=row_idx, column=5, value=dev.get('expected_path_hint', '')).border = thin_border
-        ws_deviations.cell(row=row_idx, column=6, value=dev['component_id']).border = thin_border
+        ws_deviations.cell(row=row_idx, column=2, value=dev.get('component_name', '')).border = thin_border
+        ws_deviations.cell(row=row_idx, column=3, value=dev['deviation_type']).border = thin_border
+        ws_deviations.cell(row=row_idx, column=4, value=dev.get('user', 'UNKNOWN')).border = thin_border
+        ws_deviations.cell(row=row_idx, column=5, value=dev.get('deviation_details', '')).border = thin_border
+        ws_deviations.cell(row=row_idx, column=6, value=dev.get('expected_path_hint', '')).border = thin_border
+        ws_deviations.cell(row=row_idx, column=7, value=dev['component_id']).border = thin_border
 
         tis_link = dev.get('tis_link', '')
-        tis_cell = ws_deviations.cell(row=row_idx, column=7, value=tis_link)
+        tis_cell = ws_deviations.cell(row=row_idx, column=8, value=tis_link)
         if tis_link:
             tis_cell.hyperlink = tis_link
             tis_cell.style = "Hyperlink"
@@ -217,7 +218,7 @@ def _create_deviations_sheet(wb, report, header_font_white, header_fill, thin_bo
 
         # Color by deviation type
         fill = warning_fill if dev['deviation_type'] == 'CSP_SWB_UNDER_MODEL' else deviation_fill
-        for col in range(1, 8):
+        for col in range(1, 9):
             ws_deviations.cell(row=row_idx, column=col).fill = fill
 
     for col_idx in range(1, len(deviation_headers) + 1):
@@ -407,7 +408,7 @@ def _create_valid_artifacts_sheet(wb, report, header_font_white, thin_border, va
     """Create the Valid Artifacts sheet."""
     ws_valid = wb.create_sheet("Valid Artifacts")
 
-    valid_headers = ["Path", "Uploader", "Component ID", "TIS Link"]
+    valid_headers = ["Path", "Artifact Name", "Uploader", "Component ID", "TIS Link"]
 
     for col_idx, header in enumerate(valid_headers, 1):
         cell = ws_valid.cell(row=1, column=col_idx, value=header)
@@ -417,20 +418,21 @@ def _create_valid_artifacts_sheet(wb, report, header_font_white, thin_border, va
 
     for row_idx, artifact in enumerate(report.valid_paths, 2):
         ws_valid.cell(row=row_idx, column=1, value=artifact['path']).border = thin_border
-        ws_valid.cell(row=row_idx, column=2, value=artifact.get('user', 'UNKNOWN')).border = thin_border
-        ws_valid.cell(row=row_idx, column=3, value=artifact['component_id']).border = thin_border
+        ws_valid.cell(row=row_idx, column=2, value=artifact.get('component_name', '')).border = thin_border
+        ws_valid.cell(row=row_idx, column=3, value=artifact.get('user', 'UNKNOWN')).border = thin_border
+        ws_valid.cell(row=row_idx, column=4, value=artifact['component_id']).border = thin_border
 
         tis_link = artifact.get('tis_link', '')
-        tis_cell = ws_valid.cell(row=row_idx, column=4, value=tis_link)
+        tis_cell = ws_valid.cell(row=row_idx, column=5, value=tis_link)
         if tis_link:
             tis_cell.hyperlink = tis_link
             tis_cell.style = "Hyperlink"
         tis_cell.border = thin_border
 
-        for col in range(1, 5):
+        for col in range(1, 6):
             ws_valid.cell(row=row_idx, column=col).fill = valid_fill
 
-    for col_idx in range(1, 5):
+    for col_idx in range(1, 6):
         ws_valid.column_dimensions[get_column_letter(col_idx)].width = 45
 
 
