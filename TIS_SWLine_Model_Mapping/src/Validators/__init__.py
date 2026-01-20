@@ -8,7 +8,7 @@ Classes:
 
 The validation is config-driven:
 - path_convention.expected_structure: Maps component_name to expected path
-- path_convention.model_subfolders: Maps component patterns to valid subfolders
+- path_convention.subfolder_under_SoftwareLines: Maps component_name to expected subfolders
 - naming_convention.patterns: Regex patterns for artifact name validation
 """
 
@@ -21,7 +21,7 @@ from Models import DeviationType
 from config import (
     PATH_CONVENTION_ENABLED,
     PATH_EXPECTED_STRUCTURE,
-    PATH_MODEL_SUBFOLDERS,
+    PATH_SUBFOLDERS,
     PATH_VALID_SUBFOLDERS_HIL,
     NAMING_CONVENTION_ENABLED,
     NAMING_CONVENTION_PATTERNS,
@@ -39,7 +39,7 @@ class PathValidator:
 
     Configuration is loaded from config.json:
     - path_convention.expected_structure: Maps component_name to expected path
-    - path_convention.model_subfolders: Valid subfolders per component type
+    - path_convention.subfolder_under_SoftwareLines: Expected subfolders per component_name
     - naming_convention.patterns: Regex patterns for name validation
     """
 
@@ -108,7 +108,7 @@ class PathValidator:
         is_sil_path = 'SiL' in remaining
 
         expected_structure = self._get_expected_structure(component_name)
-        model_subfolders = self._get_model_subfolders(component_name)
+        expected_subfolders = self._get_expected_subfolders(component_name)
 
         if not is_hil_path and not is_sil_path:
             if remaining and any(sf in remaining[0] for sf in PATH_VALID_SUBFOLDERS_HIL):
@@ -125,14 +125,14 @@ class PathValidator:
 
         if is_hil_path:
             result = self._validate_hil_path(
-                remaining, project, sw_line, expected_structure, model_subfolders
+                remaining, project, sw_line, expected_structure, expected_subfolders
             )
             if result[0] != DeviationType.VALID:
                 return result
 
         if is_sil_path:
             result = self._validate_sil_path(
-                remaining, project, sw_line, expected_structure, model_subfolders
+                remaining, project, sw_line, expected_structure, expected_subfolders
             )
             if result[0] != DeviationType.VALID:
                 return result
@@ -145,7 +145,7 @@ class PathValidator:
         project: str,
         sw_line: str,
         expected_structure: str,
-        model_subfolders: List[str]
+        expected_subfolders: List[str]
     ) -> Tuple[DeviationType, str, str]:
         """Validate HiL path structure."""
         hil_index = remaining.index('HiL')
@@ -159,7 +159,7 @@ class PathValidator:
             )
 
         first_after_hil = after_hil[0]
-        check_subfolders = model_subfolders if model_subfolders else PATH_VALID_SUBFOLDERS_HIL
+        check_subfolders = expected_subfolders if expected_subfolders else PATH_VALID_SUBFOLDERS_HIL
         is_valid_subfolder = any(
             sf.lower() in first_after_hil.lower()
             for sf in check_subfolders
@@ -179,7 +179,7 @@ class PathValidator:
         project: str,
         sw_line: str,
         expected_structure: str,
-        model_subfolders: List[str]
+        expected_subfolders: List[str]
     ) -> Tuple[DeviationType, str, str]:
         """Validate SiL path structure."""
         sil_index = remaining.index('SiL')
@@ -192,30 +192,30 @@ class PathValidator:
                 expected_structure or f"{project}/{sw_line}/Model/SiL/[subfolder]/..."
             )
 
-        if model_subfolders:
+        if expected_subfolders:
             first_after_sil = after_sil[0]
             is_valid_subfolder = any(
                 sf.lower() in first_after_sil.lower()
-                for sf in model_subfolders
+                for sf in expected_subfolders
             )
             if not is_valid_subfolder:
                 return (
                     DeviationType.INVALID_SUBFOLDER,
-                    f"Invalid subfolder '{first_after_sil}' after SiL (expected: {', '.join(model_subfolders)})",
-                    expected_structure or f"{project}/{sw_line}/Model/SiL/[{'/'.join(model_subfolders)}]/..."
+                    f"Invalid subfolder '{first_after_sil}' after SiL (expected: {', '.join(expected_subfolders)})",
+                    expected_structure or f"{project}/{sw_line}/Model/SiL/[{'/'.join(expected_subfolders)}]/..."
                 )
 
         return (DeviationType.VALID, "", "")
 
-    def _get_model_subfolders(self, component_name: str) -> List[str]:
-        """Get expected model subfolders for a component_name by matching patterns."""
+    def _get_expected_subfolders(self, component_name: str) -> List[str]:
+        """Get expected subfolders under software line for a component_name."""
         if not component_name:
             return []
 
-        if component_name in PATH_MODEL_SUBFOLDERS:
-            return PATH_MODEL_SUBFOLDERS[component_name]
+        if component_name in PATH_SUBFOLDERS:
+            return PATH_SUBFOLDERS[component_name]
 
-        for pattern, subfolders in PATH_MODEL_SUBFOLDERS.items():
+        for pattern, subfolders in PATH_SUBFOLDERS.items():
             if pattern.startswith('_comment'):
                 continue
             if component_name.startswith(pattern):

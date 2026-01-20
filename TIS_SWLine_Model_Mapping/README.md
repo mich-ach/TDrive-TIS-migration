@@ -172,9 +172,9 @@ Define expected path structures using **component_name** as key:
         "vVeh_LCO": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
         "test_ECU-TEST": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}"
     },
-    "model_subfolders": {
-        "vVeh_LCO": ["vVeh"],
-        "test_ECU-TEST": ["BFT", "SIT", "UIT", "SWT", "HIT"]
+    "subfolder_under_SoftwareLines": {
+        "vVeh_LCO": ["Model", "SiL", "vVeh"],
+        "test_ECU-TEST": ["Test"]
     }
 }
 ```
@@ -328,11 +328,13 @@ Add expected path structure using **component_name** as the key:
     "expected_structure": {
         "myNewType_Name": "{Project}/{SoftwareLine}/CustomFolder/.../{artifact}"
     },
-    "model_subfolders": {
-        "myNewType_Name": ["Subfolder1", "Subfolder2"]
+    "subfolder_under_SoftwareLines": {
+        "myNewType_Name": ["CustomFolder", "Subfolder"]
     }
 }
 ```
+
+The `subfolder_under_SoftwareLines` defines the expected folder hierarchy under the software line (e.g., `["Model", "SiL", "vVeh"]` means the path should contain `Model/SiL/vVeh/`).
 
 ### Reference: Additional Convention Patterns
 
@@ -395,15 +397,19 @@ Below are example patterns for other artifact types that can be added:
         "vXCU_Silver": "{Project}/{SoftwareLine}/Model/SiL/vXCU/.../{artifact}",
         "XCUSW_Hex": "{Project}/{SoftwareLine}/Model/SiL/XCUSW/.../{artifact}"
     },
-    "model_subfolders": {
-        "MDL": ["CSP", "SWB"],
-        "MDL_HiL": ["CSP", "SWB"],
-        "MDL_SiL": ["Flexray", "Plant", "SubCAN", "vEL"],
-        "SetupSkeleton": ["SetupSkeleton", "SetupSkeleton_Silver"],
-        "vVehFrame": ["vVehFrame", "vVehFrame_Silver"],
-        "vVeh": ["vVeh"],
-        "vXCU": ["vXCU"],
-        "XCUSW": ["XCUSW"]
+    "subfolder_under_SoftwareLines": {
+        "MDL": ["Model", "HiL", "CSP"],
+        "MDL_HiL_PCIe": ["Model", "HiL", "CSP"],
+        "MDL_HiL_VME": ["Model", "HiL", "SWB"],
+        "MDL_SiL": ["Model", "SiL", "Flexray"],
+        "SetupSkeleton_Silver": ["Model", "SiL", "SetupSkeleton_Silver"],
+        "SetupSkeleton_FMU": ["Model", "SiL", "SetupSkeleton"],
+        "vVehFrame_Silver": ["Model", "SiL", "vVehFrame_Silver"],
+        "vVehFrame_FMU": ["Model", "SiL", "vVehFrame"],
+        "vVeh_Silver": ["Model", "SiL", "vVeh"],
+        "vVeh_FMU": ["Model", "SiL", "vVeh"],
+        "vXCU_Silver": ["Model", "SiL", "vXCU"],
+        "XCUSW_Hex": ["Model", "SiL", "XCUSW"]
     }
 }
 ```

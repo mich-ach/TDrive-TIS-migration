@@ -148,13 +148,12 @@ PATH_CONVENTION_ENABLED = _config.get("path_convention", {}).get("enabled", Fals
 PATH_CONVENTION_CONFIG = _config.get("path_convention", {})
 LABCAR_PLATFORMS = PATH_CONVENTION_CONFIG.get("labcar_platforms", ["VME", "PCIe"])
 
-# Expected structure and model subfolders per component_name
+# Expected structure and subfolders per component_name
 PATH_EXPECTED_STRUCTURE = PATH_CONVENTION_CONFIG.get("expected_structure", {})
-PATH_MODEL_SUBFOLDERS = PATH_CONVENTION_CONFIG.get("model_subfolders", {})
+PATH_SUBFOLDERS = PATH_CONVENTION_CONFIG.get("subfolder_under_SoftwareLines", {})
 
-# Legacy compatibility - derive HIL/SIL subfolders from new structure
-PATH_VALID_SUBFOLDERS_HIL = PATH_MODEL_SUBFOLDERS.get("MDL", ["CSP", "SWB"])
-PATH_VALID_SUBFOLDERS_SIL = PATH_MODEL_SUBFOLDERS.get("MDL_SiL", [])
+# Legacy compatibility - default HIL subfolders
+PATH_VALID_SUBFOLDERS_HIL = ["CSP", "SWB"]
 
 # =============================================================================
 # COMPUTED VALUES (not in config.json)

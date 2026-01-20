@@ -95,9 +95,9 @@
             "vVeh_LCO": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
             "test_ECU-TEST": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}"
         },
-        "model_subfolders": {
-            "vVeh_LCO": ["vVeh"],
-            "test_ECU-TEST": ["BFT", "SIT", "UIT", "SWT", "HIT"]
+        "subfolder_under_SoftwareLines": {
+            "vVeh_LCO": ["Model", "SiL", "vVeh"],
+            "test_ECU-TEST": ["Test"]
         }
     },
 
