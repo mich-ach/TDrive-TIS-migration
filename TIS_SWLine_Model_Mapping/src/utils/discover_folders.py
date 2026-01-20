@@ -1,138 +1,122 @@
 #!/usr/bin/env python3
 """
-Discover unique folder names at a specific position in artifact paths.
+Discover unique folder names under a specific parent folder using TIS API.
 
-Scans artifact paths and extracts folder names after a specified parent folder.
-Useful for discovering allowed values for path convention variables.
+Makes a single API call to fetch the project tree and finds all folders
+that appear directly under the specified parent folder.
 
 Usage:
-    python -m src.utils.discover_folders <parent_folder> [json_file]
+    python -m src.utils.discover_folders <parent_folder> [children_level]
 
 Examples:
-    # Find all folders under "Test" (TestType discovery)
-    python -m src.utils.discover_folders Test
-
-    # Find all folders under "Model/SiL"
-    python -m src.utils.discover_folders SiL
-
-    # Find all folders under "Model/HiL"
-    python -m src.utils.discover_folders HiL
-
-    # With specific JSON file
-    python -m src.utils.discover_folders Test /path/to/artifacts.json
+    python -m src.utils.discover_folders Test      # Find TestTypes
+    python -m src.utils.discover_folders SiL       # Find SiL subfolders
+    python -m src.utils.discover_folders vVeh      # Find vVeh subfolders
+    python -m src.utils.discover_folders HiL       # Find HiL subfolders
 """
 
-import json
 import sys
 from pathlib import Path
 from collections import defaultdict
-from typing import Dict, Set, Optional, List
+from typing import Dict, Set, List, Any
+
+# Add src to path for imports
+script_dir = Path(__file__).resolve().parent
+src_dir = script_dir.parent
+sys.path.insert(0, str(src_dir))
+
+from Api import TISClient
+from config import ROOT_PROJECT_ID
 
 
-def find_latest_json(output_dir: Path) -> Optional[Path]:
-    """Find the latest artifacts JSON file in output directory."""
-    if not output_dir.exists():
-        return None
-
-    run_dirs = sorted(output_dir.glob("run_*"), reverse=True)
-    for run_dir in run_dirs:
-        json_files = list(run_dir.glob("*_artifacts_*.json"))
-        if json_files:
-            return sorted(json_files, reverse=True)[0]
-
-    return None
-
-
-def extract_folder_after(path: str, parent_folder: str) -> Optional[str]:
+def find_folders_under_parent(
+    component: Dict[str, Any],
+    parent_folder: str,
+    results: Dict[str, Set[str]],
+    path: List[str] = None
+) -> None:
     """
-    Extract the folder name immediately after the specified parent folder.
+    Recursively find folders directly under the specified parent folder.
 
     Args:
-        path: The full path (e.g., "Project/SWLine/Model/SiL/vVeh/...")
-        parent_folder: The folder to look for (e.g., "SiL")
+        component: TIS component data
+        parent_folder: The folder name to look for (e.g., "Test", "SiL")
+        results: Dict to store results (folder_name -> set of paths)
+        path: Current path as list of folder names
+    """
+    if path is None:
+        path = []
+
+    name = component.get('name', '')
+    current_path = path + [name] if name else path
+
+    # Check if parent was the target folder
+    if len(path) > 0 and path[-1] == parent_folder:
+        path_str = '/'.join(current_path)
+        results[name].add(path_str)
+
+    # Recurse into children
+    children = component.get('children', [])
+    for child in children:
+        find_folders_under_parent(child, parent_folder, results, current_path)
+
+
+def discover_folders_from_api(parent_folder: str, children_level: int = 6) -> Dict[str, Set[str]]:
+    """
+    Discover folders under parent_folder by fetching from TIS API.
+
+    Args:
+        parent_folder: The folder to search under (e.g., "Test", "SiL")
+        children_level: Depth of children to fetch
 
     Returns:
-        The folder name after parent_folder, or None if not found
+        Dict mapping folder_name -> Set of example paths
     """
-    if not path:
-        return None
+    print(f"Fetching TIS data (children_level={children_level})...")
+    print(f"Root project ID: {ROOT_PROJECT_ID}")
+    print(f"Looking for folders under: {parent_folder}/")
 
-    parts = path.split('/')
-    for i, part in enumerate(parts):
-        if part == parent_folder and i + 1 < len(parts):
-            return parts[i + 1]
+    client = TISClient(children_level=children_level)
+    data, timed_out, elapsed = client.get_component(
+        ROOT_PROJECT_ID,
+        children_level=children_level,
+        use_cache=False
+    )
 
-    return None
+    if timed_out or not data:
+        print(f"Error: API call failed or timed out (elapsed: {elapsed:.1f}s)")
+        return {}
 
+    print(f"API call completed in {elapsed:.1f}s")
 
-def discover_folders(json_file: Path, parent_folder: str) -> Dict[str, Set[str]]:
-    """
-    Discover all unique folder names after the specified parent folder.
-
-    Returns:
-        Dict mapping: folder_name -> Set of full paths where it was found
-    """
-    with open(json_file, 'r', encoding='utf-8') as f:
-        data = json.load(f)
-
-    # folder_name -> Set of example paths
+    # Find all folders under the parent
     results: Dict[str, Set[str]] = defaultdict(set)
-
-    for project_name, project_data in data.items():
-        if not isinstance(project_data, dict) or 'software_lines' not in project_data:
-            continue
-
-        for sw_line_name, sw_line_data in project_data.get('software_lines', {}).items():
-            if not isinstance(sw_line_data, dict):
-                continue
-
-            artifacts = sw_line_data.get('artifacts', [])
-            if sw_line_data.get('latest_artifact'):
-                artifacts = [sw_line_data['latest_artifact']] + artifacts
-
-            for artifact in artifacts:
-                if not isinstance(artifact, dict):
-                    continue
-
-                upload_path = artifact.get('upload_path', '')
-                folder_name = extract_folder_after(upload_path, parent_folder)
-
-                if folder_name:
-                    # Store a truncated example path
-                    parts = upload_path.split('/')
-                    if len(parts) > 6:
-                        example = '/'.join(parts[:6]) + '/...'
-                    else:
-                        example = upload_path
-                    results[folder_name].add(example)
+    find_folders_under_parent(data, parent_folder, results)
 
     return results
 
 
 def print_results(results: Dict[str, Set[str]], parent_folder: str) -> None:
-    """Print discovered folders in a readable format."""
+    """Print discovered folders."""
     sorted_folders = sorted(results.keys())
 
     print("\n" + "=" * 60)
     print(f"FOLDERS FOUND UNDER '{parent_folder}/'")
     print("=" * 60)
 
-    # Print as Python list
     print(f"\nUnique folders ({len(sorted_folders)}):")
-    print(f'"{parent_folder}_values": {sorted_folders}')
+    print(f'FOLDERS = {sorted_folders}')
 
-    # Print with example paths
     print("\n" + "-" * 60)
-    print("DETAILS WITH EXAMPLE PATHS")
+    print("EXAMPLE PATHS")
     print("-" * 60)
 
     for folder_name in sorted_folders:
-        examples = sorted(results[folder_name])[:3]  # Show max 3 examples
+        examples = sorted(results[folder_name])[:2]
         print(f"\n{folder_name}/")
         for ex in examples:
-            print(f"  Example: {ex}")
+            print(f"  {ex}")
 
-    # Print for config.json
     print("\n" + "=" * 60)
     print("FOR CONFIG.JSON")
     print("=" * 60)
@@ -141,44 +125,29 @@ def print_results(results: Dict[str, Set[str]], parent_folder: str) -> None:
 
 def main():
     if len(sys.argv) < 2:
-        print("Usage: python -m src.utils.discover_folders <parent_folder> [json_file]")
+        print("Usage: python -m src.utils.discover_folders <parent_folder> [children_level]")
         print("\nExamples:")
-        print("  python -m src.utils.discover_folders Test      # Find TestTypes")
-        print("  python -m src.utils.discover_folders SiL       # Find SiL subfolders")
-        print("  python -m src.utils.discover_folders HiL       # Find HiL subfolders")
-        print("  python -m src.utils.discover_folders vVeh      # Find vVeh subfolders")
+        print("  python -m src.utils.discover_folders Test   # Find TestTypes")
+        print("  python -m src.utils.discover_folders SiL    # Find SiL subfolders")
+        print("  python -m src.utils.discover_folders vVeh   # Find vVeh subfolders")
+        print("  python -m src.utils.discover_folders HiL    # Find HiL subfolders")
         sys.exit(1)
 
     parent_folder = sys.argv[1]
+    children_level = 6
 
-    # Determine paths
-    script_dir = Path(__file__).resolve().parent
-    src_dir = script_dir.parent
-    project_dir = src_dir.parent
-    output_dir = project_dir / "output"
-
-    # Get JSON file
     if len(sys.argv) > 2:
-        json_file = Path(sys.argv[2])
-    else:
-        json_file = find_latest_json(output_dir)
-        if not json_file:
-            print("Error: No artifacts JSON file found in output/")
-            print("Provide a JSON file path as second argument")
+        try:
+            children_level = int(sys.argv[2])
+        except ValueError:
+            print(f"Invalid children_level: {sys.argv[2]}")
             sys.exit(1)
 
-    if not json_file.exists():
-        print(f"Error: File not found: {json_file}")
-        sys.exit(1)
-
-    print(f"Scanning: {json_file}")
-    print(f"Looking for folders under: {parent_folder}/")
-
-    results = discover_folders(json_file, parent_folder)
+    results = discover_folders_from_api(parent_folder, children_level)
 
     if not results:
         print(f"\nNo folders found under '{parent_folder}/'")
-        print("Make sure the artifacts have paths with this folder.")
+        print("Try increasing children_level for deeper search.")
     else:
         print_results(results, parent_folder)
 
