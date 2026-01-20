@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 def generate_excel_report(
     report: ValidationReport,
     output_dir: Optional[Path] = None,
-    component_depth_overrides: Optional[Dict[str, int]] = None
+    component_depth_overrides: Optional[Dict[str, int]] = None,
+    skip_component_type_sheets: bool = False
 ) -> str:
     """
     Generate an Excel report with multiple sheets for accountability.
@@ -30,13 +31,17 @@ def generate_excel_report(
     2. All Deviations - Complete list of deviations
     3. By User - Deviations grouped by uploader (accountability)
     4. By Project - Deviations grouped by project
-    5. Valid Artifacts - List of correctly placed artifacts
-    6. Slow Components - Components that required reduced depth (optional)
+    5. By Component Type - Summary by component type (skipped if skip_component_type_sheets=True)
+    6. Dev-{type} - Per-component deviations (skipped if skip_component_type_sheets=True)
+    7. Valid Artifacts - List of correctly placed artifacts
+    8. Slow Components - Components that required reduced depth (optional)
 
     Args:
         report: The ValidationReport containing all validation results
         output_dir: Directory to save the report (defaults to current directory)
         component_depth_overrides: Dict of component IDs to their reduced depth values
+        skip_component_type_sheets: If True, skip "By Component Type" and "Dev-" sheets
+                                    (useful when generating per-component reports)
 
     Returns:
         Path to the generated Excel file, or empty string if generation failed
@@ -75,8 +80,12 @@ def generate_excel_report(
                              deviation_fill, warning_fill, get_column_letter)
     _create_by_user_sheet(wb, report, header_font_white, header_fill, thin_border, Alignment)
     _create_by_project_sheet(wb, report, header_font_white, header_fill, thin_border, get_column_letter)
-    _create_by_component_type_sheet(wb, report, header_font_white, header_fill, thin_border,
-                                    deviation_fill, warning_fill, get_column_letter, Alignment)
+
+    # Only create component type sheets if not skipped (for combined reports)
+    if not skip_component_type_sheets:
+        _create_by_component_type_sheet(wb, report, header_font_white, header_fill, thin_border,
+                                        deviation_fill, warning_fill, get_column_letter, Alignment)
+
     _create_valid_artifacts_sheet(wb, report, header_font_white, thin_border, valid_fill,
                                   PatternFill, get_column_letter)
 
