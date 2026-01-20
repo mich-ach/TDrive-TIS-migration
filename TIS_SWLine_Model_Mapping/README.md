@@ -141,16 +141,21 @@ Skip folders to improve performance:
 
 ### Naming Convention Patterns
 
-Define regex patterns for artifact name validation:
+Define regex patterns for artifact name validation using **component_name** as key:
 
 ```json
 "naming_convention": {
     "enabled": true,
     "patterns": {
-        "vveh_lco": {
-            "description": "vVeh_LCO artifact pattern",
-            "pattern": "^VW\\s+vVeh_LCO\\s*:...",
-            "example": "VW vVeh_LCO : DMG1211V07C1935 / M22J71 []"
+        "vVeh_LCO": {
+            "description": "vVeh_LCO artifact: [timestamp -] VW vVeh_LCO : <SW> / <PVER> [<dataset>] <variant>",
+            "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_LCO\\s*:...",
+            "example": "VW vVeh_LCO : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
+        },
+        "test_ECU-TEST": {
+            "description": "ECU-TEST test artifact: <Project>_<TestType>_<Description>",
+            "pattern": "^(?P<project>[A-Za-z0-9_]+)_(?P<test_type>BFT|SIT|UIT|SWT|HIT)_(?P<description>.+)$",
+            "example": "MG1CS211_BFT_DiagnosticTests"
         }
     }
 }
@@ -158,7 +163,7 @@ Define regex patterns for artifact name validation:
 
 ### Path Convention
 
-Define expected path structures:
+Define expected path structures using **component_name** as key:
 
 ```json
 "path_convention": {
@@ -166,6 +171,10 @@ Define expected path structures:
     "expected_structure": {
         "vVeh_LCO": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
         "test_ECU-TEST": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}"
+    },
+    "model_subfolders": {
+        "vVeh_LCO": ["vVeh"],
+        "test_ECU-TEST": ["BFT", "SIT", "UIT", "SWT", "HIT"]
     }
 }
 ```
@@ -294,26 +303,107 @@ COMPONENT_COLUMNS = {
 
 Column tuple: `(key, header, min_width, weight, data_key)`
 
-### Step 5: Add Naming Convention (Optional)
+### Step 5: Add Naming Convention
+
+Add a naming pattern in `config.json` using **component_name** as the key:
 
 ```json
 "naming_convention": {
     "patterns": {
-        "my_new_type": {
-            "description": "My new artifact type pattern",
-            "pattern": "^(?P<project>.+)_(?P<version>\\d+)$",
-            "example": "MyProject_42"
+        "myNewType_Name": {
+            "description": "Description of the naming pattern",
+            "pattern": "^regex_pattern_here$",
+            "example": "Example artifact name"
         }
     }
 }
 ```
 
-### Step 6: Add Path Convention (Optional)
+### Step 6: Add Path Convention
+
+Add expected path structure using **component_name** as the key:
 
 ```json
 "path_convention": {
     "expected_structure": {
         "myNewType_Name": "{Project}/{SoftwareLine}/CustomFolder/.../{artifact}"
+    },
+    "model_subfolders": {
+        "myNewType_Name": ["Subfolder1", "Subfolder2"]
+    }
+}
+```
+
+### Reference: Additional Convention Patterns
+
+Below are example patterns for other artifact types that can be added:
+
+**Naming Conventions:**
+
+```json
+"naming_convention": {
+    "patterns": {
+        "MDL": {
+            "description": "MDL Model (HiL/SiL optional): [timestamp -] VW MDL[_HiL|_SiL] : <ECU> / <variant>",
+            "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_(?P<type>HiL|SiL))?\\s*:\\s*(?P<ecu>[^/]+)\\s*/\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
+            "example": "VW MDL : MG1CS038_C3 / V8T_Stereo_DCT_FX_v8"
+        },
+        "MDL_HiL_PCIe": {
+            "description": "HiL Model with platform: [timestamp -] VW MDL[_HiL]_<platform> : <ECU> / <variant>",
+            "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_HiL)?_(?P<platform>PCIe|VME)\\s*:\\s*(?P<ecu>[^/]+)\\s*/\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
+            "example": "VW MDL_HiL_PCIe : MG1CS211_C_EA211Evo / 110kW_OPF_DQ_CANv7"
+        },
+        "MDL_SiL": {
+            "description": "SiL Reference Model: [timestamp -] VW MDL[_HiL|_SiL] : <ECU> / <variant>_Ref_SiL",
+            "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_(?:HiL|SiL))?\\s*:\\s*(?P<ecu>[^/]+)\\s*/\\s*(?P<variant>.+)_Ref_SiL$",
+            "example": "VW MDL : MG1CS211_C_EA211Evo / 110kW_OPF_DQ_CANv7_Ref_SiL"
+        },
+        "vVehFrame_Silver": {
+            "description": "vVehFrame: [timestamp -] VW vVehFrame_<env> : <SW> / <PVER> [<dataset>] <variant>",
+            "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVehFrame_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
+            "example": "VW vVehFrame_Silver : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
+        },
+        "SetupSkeleton_Silver": {
+            "description": "SetupSkeleton: [timestamp -] VW SetupSkeleton_<env> : <SW> / <PVER> [<dataset>] <variant>",
+            "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+SetupSkeleton_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
+            "example": "VW SetupSkeleton_Silver : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
+        },
+        "vVeh_Silver": {
+            "description": "vVeh complete workspace: [timestamp -] VW vVeh_<env> : <SW> / <PVER> [<dataset>] <variant>",
+            "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
+            "example": "VW vVeh_Silver : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
+        }
+    }
+}
+```
+
+**Path Conventions:**
+
+```json
+"path_convention": {
+    "expected_structure": {
+        "MDL": "{Project}/{SoftwareLine}/Model/HiL/{CSP|SWB}/.../{artifact}",
+        "MDL_HiL_PCIe": "{Project}/{SoftwareLine}/Model/HiL/{CSP|SWB}/.../{artifact}",
+        "MDL_HiL_VME": "{Project}/{SoftwareLine}/Model/HiL/{CSP|SWB}/.../{artifact}",
+        "MDL_SiL": "{Project}/{SoftwareLine}/Model/SiL/{Flexray|Plant|SubCAN|vEL}/.../{artifact}",
+        "SetupSkeleton_Silver": "{Project}/{SoftwareLine}/Model/SiL/SetupSkeleton_Silver/.../{artifact}",
+        "SetupSkeleton_FMU": "{Project}/{SoftwareLine}/Model/SiL/SetupSkeleton/.../{artifact}",
+        "vVehFrame_Silver": "{Project}/{SoftwareLine}/Model/SiL/vVehFrame_Silver/.../{artifact}",
+        "vVehFrame_FMU": "{Project}/{SoftwareLine}/Model/SiL/vVehFrame/.../{artifact}",
+        "vVeh_Silver": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
+        "vVeh_FMU": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}",
+        "vXCU_Silver": "{Project}/{SoftwareLine}/Model/SiL/vXCU/.../{artifact}",
+        "XCUSW_Hex": "{Project}/{SoftwareLine}/Model/SiL/XCUSW/.../{artifact}"
+    },
+    "model_subfolders": {
+        "MDL": ["CSP", "SWB"],
+        "MDL_HiL": ["CSP", "SWB"],
+        "MDL_SiL": ["Flexray", "Plant", "SubCAN", "vEL"],
+        "SetupSkeleton": ["SetupSkeleton", "SetupSkeleton_Silver"],
+        "vVehFrame": ["vVehFrame", "vVehFrame_Silver"],
+        "vVeh": ["vVeh"],
+        "vXCU": ["vXCU"],
+        "XCUSW": ["XCUSW"]
     }
 }
 ```
