@@ -353,7 +353,6 @@ def run_workflow(excel_file: str):
         return False
     return True
 
-
 def resolve_excel_path(file_path: str) -> Path:
     """
     Resolve Excel file path. Handles both absolute and relative paths.
