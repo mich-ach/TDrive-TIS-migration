@@ -169,7 +169,9 @@ Define expected path structures using **component_name** as key. Each component 
 "path_convention": {
     "enabled": true,
     "vVeh_LCO": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}"
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/{CSP_SWB}/{LabcarType}/.../{artifact}",
+        "CSP_SWB_contains": ["CSP", "SWB"],
+        "LabcarType": ["VME", "PCIe"]
     },
     "test_ECU-TEST": {
         "expected_structure": "{Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}",
@@ -178,8 +180,9 @@ Define expected path structures using **component_name** as key. Each component 
 }
 ```
 
-- Variables in `{brackets}` are placeholders (e.g., `{TestType}`)
-- If a variable has allowed values, define them as a list (e.g., `"TestType": ["BFT", ...]`)
+- Variables in `{brackets}` are placeholders (e.g., `{TestType}`, `{CSP_SWB}`)
+- **Exact match**: `"VariableName": ["Value1", "Value2"]` - folder must exactly match one value
+- **Contains match**: `"VariableName_contains": ["CSP", "SWB"]` - folder must contain one of the values
 - `{Project}`, `{SoftwareLine}`, `{artifact}`, and `...` are special placeholders
 
 ## Usage
@@ -329,14 +332,16 @@ Add expected path structure using **component_name** as the key:
 ```json
 "path_convention": {
     "myNewType_Name": {
-        "expected_structure": "{Project}/{SoftwareLine}/CustomFolder/{VariablePart}/.../{artifact}",
-        "VariablePart": ["Option1", "Option2", "Option3"]
+        "expected_structure": "{Project}/{SoftwareLine}/CustomFolder/{VariablePart}/{Platform}/.../{artifact}",
+        "VariablePart_contains": ["PartA", "PartB"],
+        "Platform": ["Option1", "Option2"]
     }
 }
 ```
 
 - The `expected_structure` defines required folders in the path
-- Variables like `{VariablePart}` can have allowed values defined as lists
+- **Exact match**: `"VariableName": ["Value1", "Value2"]` - folder must exactly match
+- **Contains match**: `"VariableName_contains": ["X", "Y"]` - folder must contain X or Y
 - The validator checks that required folders exist and variable values are valid
 
 ### Reference: Additional Convention Patterns
@@ -387,14 +392,17 @@ Below are example patterns for other artifact types that can be added:
 ```json
 "path_convention": {
     "MDL": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/{Platform}/.../{artifact}",
-        "Platform": ["CSP", "SWB"]
+        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/{CSP_SWB}/{LabcarType}/.../{artifact}",
+        "CSP_SWB_contains": ["CSP", "SWB"],
+        "LabcarType": ["VME", "PCIe"]
     },
     "MDL_HiL_PCIe": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/CSP/.../{artifact}"
+        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/{CSP_SWB}/PCIe/.../{artifact}",
+        "CSP_SWB_contains": ["CSP", "SWB"]
     },
     "MDL_HiL_VME": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/SWB/.../{artifact}"
+        "expected_structure": "{Project}/{SoftwareLine}/Model/HiL/{CSP_SWB}/VME/.../{artifact}",
+        "CSP_SWB_contains": ["CSP", "SWB"]
     },
     "MDL_SiL": {
         "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/{SiLType}/.../{artifact}",
@@ -403,26 +411,16 @@ Below are example patterns for other artifact types that can be added:
     "SetupSkeleton_Silver": {
         "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/SetupSkeleton_Silver/.../{artifact}"
     },
-    "SetupSkeleton_FMU": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/SetupSkeleton/.../{artifact}"
-    },
     "vVehFrame_Silver": {
         "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVehFrame_Silver/.../{artifact}"
     },
-    "vVehFrame_FMU": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVehFrame/.../{artifact}"
-    },
     "vVeh_Silver": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}"
-    },
-    "vVeh_FMU": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}"
+        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vVeh/{CSP_SWB}/{LabcarType}/.../{artifact}",
+        "CSP_SWB_contains": ["CSP", "SWB"],
+        "LabcarType": ["VME", "PCIe"]
     },
     "vXCU_Silver": {
         "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/vXCU/.../{artifact}"
-    },
-    "XCUSW_Hex": {
-        "expected_structure": "{Project}/{SoftwareLine}/Model/SiL/XCUSW/.../{artifact}"
     }
 }
 ```

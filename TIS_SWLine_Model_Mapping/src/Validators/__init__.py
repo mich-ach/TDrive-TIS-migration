@@ -157,7 +157,7 @@ class PathValidator:
     ) -> Tuple[DeviationType, str, str]:
         """Validate path against expected structure with variable substitution."""
         # Parse expected structure to get required folders
-        # Format: {Project}/{SoftwareLine}/Model/SiL/vVeh/.../{artifact}
+        # Format: {Project}/{SoftwareLine}/Model/SiL/vVeh/{CSP_SWB}/{LabcarType}/.../{artifact}
         # or: {Project}/{SoftwareLine}/Test/{TestType}/.../{artifact}
 
         structure_parts = expected_structure.split('/')
@@ -169,7 +169,7 @@ class PathValidator:
             if part.startswith('{') and part.endswith('}'):
                 var_name = part[1:-1]
                 if var_name not in ('Project', 'SoftwareLine', 'artifact', '...'):
-                    # This is a variable like {TestType}
+                    # This is a variable like {TestType} or {CSP_SWB}
                     variables_in_path[i] = var_name
             elif part != '...':
                 required_folders.append(part)
@@ -185,18 +185,35 @@ class PathValidator:
 
         # Validate variables have allowed values
         for var_name in variables_in_path.values():
-            allowed_values = convention.get(var_name, [])
-            if allowed_values:
-                # Find the actual value in the path
+            # Check for _contains suffix (partial matching)
+            contains_key = f"{var_name}_contains"
+            if contains_key in convention:
+                allowed_values = convention[contains_key]
                 actual_value = self._find_variable_value_in_path(
                     path_parts, required_folders, var_name, structure_parts
                 )
-                if actual_value and actual_value not in allowed_values:
-                    return (
-                        DeviationType.INVALID_SUBFOLDER,
-                        f"Invalid {var_name} '{actual_value}' (allowed: {', '.join(allowed_values)})",
-                        expected_structure
+                if actual_value:
+                    # Check if actual_value contains any of the allowed values
+                    matches = any(av.lower() in actual_value.lower() for av in allowed_values)
+                    if not matches:
+                        return (
+                            DeviationType.INVALID_SUBFOLDER,
+                            f"Invalid {var_name} '{actual_value}' (must contain: {' or '.join(allowed_values)})",
+                            expected_structure
+                        )
+            else:
+                # Exact match
+                allowed_values = convention.get(var_name, [])
+                if allowed_values:
+                    actual_value = self._find_variable_value_in_path(
+                        path_parts, required_folders, var_name, structure_parts
                     )
+                    if actual_value and actual_value not in allowed_values:
+                        return (
+                            DeviationType.INVALID_SUBFOLDER,
+                            f"Invalid {var_name} '{actual_value}' (allowed: {', '.join(allowed_values)})",
+                            expected_structure
+                        )
 
         return (DeviationType.VALID, "", "")
 
