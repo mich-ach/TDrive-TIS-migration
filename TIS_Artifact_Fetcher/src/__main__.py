@@ -147,6 +147,21 @@ def generate_validation_report_for_component(
                 name_valid, matched_pattern, matched_groups, name_error = path_validator.validate_naming_convention(artifact_name)
                 path_deviation, path_details, path_hint = path_validator.validate_path(path, artifact_name, component_type)
 
+                # Validate test type attribute vs path (for test_ECU-TEST)
+                test_type_deviation, test_type_details, test_type_hint = path_validator.validate_test_type(
+                    component_type,
+                    artifact.get('test_type'),
+                    path
+                )
+
+                # Validate test configuration P-number vs software line (for test_ECU-TEST)
+                test_config_deviation, test_config_details, test_config_hint = path_validator.validate_test_config_software_line(
+                    component_type,
+                    artifact.get('test_configuration'),
+                    artifact.get('testbench_configuration'),
+                    sw_line_name
+                )
+
                 deviation_type = DeviationType.VALID
                 details = ""
                 hint = ""
@@ -160,6 +175,14 @@ def generate_validation_report_for_component(
                     deviation_type = path_deviation
                     details = path_details
                     hint = path_hint
+                elif test_type_deviation != DeviationType.VALID:
+                    deviation_type = test_type_deviation
+                    details = test_type_details
+                    hint = test_type_hint
+                elif test_config_deviation != DeviationType.VALID:
+                    deviation_type = test_config_deviation
+                    details = test_config_details
+                    hint = test_config_hint
 
                 artifact_dict = {
                     'component_id': artifact.get('artifact_rid', ''),
@@ -173,6 +196,9 @@ def generate_validation_report_for_component(
                     'expected_path_hint': hint,
                     'name_pattern_matched': matched_pattern,
                     'name_pattern_groups': matched_groups,
+                    'test_configuration': artifact.get('test_configuration'),
+                    'testbench_configuration': artifact.get('testbench_configuration'),
+                    'software_line': sw_line_name,
                 }
 
                 if deviation_type == DeviationType.VALID:
