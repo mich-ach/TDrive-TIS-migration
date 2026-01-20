@@ -68,14 +68,14 @@
         "enabled": true,
         "patterns": {
             "vVeh_LCO": {
-                "description": "vVeh_LCO artifact: [timestamp -] VW MDL : <Project> / <Subversion> [; <id>]",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\s;]+)(?:\\s*;\\s*(?P<id>\\d+))?$",
-                "example": "VW MDL : ProjectSubversion / Subversion ; 220324"
+                "description": "vVeh_LCO artifact: [timestamp -] VW MDL[_suffix] : <Project> / <Subversion> [; <id>]",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_[A-Za-z0-9]+)?\\s*:\\s*(?P<project>[^/]+?)\\s*/\\s*(?P<subversion>[^\\s;]+)(?:\\s*;\\s*(?P<id>\\d+))?$",
+                "example": "VW MDL : ProjectSubversion / Subversion ; 220324 or VW MDL_HIL : Project / Sub"
             },
             "test_ECU-TEST": {
-                "description": "test_ECU-TEST artifact: [timestamp -] VW TST : <TestName> [; <id>]",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+TST\\s*:\\s*(?P<testname>.+?)(?:\\s*;\\s*(?P<id>[a-zA-Z0-9]+))?$",
-                "example": "VW TST : Project1234/ P69 [TestName] ; 132019"
+                "description": "test_ECU-TEST artifact: [timestamp -] VW TST[_suffix] : <TestName> [; <id>]",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+TST(?:_[A-Za-z0-9]+)?\\s*:\\s*(?P<testname>.+?)(?:\\s*;\\s*(?P<id>[a-zA-Z0-9]+))?$",
+                "example": "VW TST : Project1234/ P69 [TestName] ; 132019 or VW TST_HIL : TestName"
             }
         }
     },
