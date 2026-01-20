@@ -9,9 +9,13 @@ Functions:
 
 import datetime
 import logging
+import sys
 from pathlib import Path
 from typing import Dict, Optional, List
 
+# Add TIS extractor to path for Models import
+import config
+sys.path.insert(0, str(config.TIS_EXTRACTOR_ABS_PATH / "src"))
 from Models import ValidationReport
 
 logger = logging.getLogger(__name__)

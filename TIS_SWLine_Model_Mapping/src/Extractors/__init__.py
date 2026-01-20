@@ -243,9 +243,14 @@ class ArtifactExtractor:
             'component_type': actual_component_name,
             'component_type_category': actual_component_type,
             'component_grp': actual_component_grp,
-            'simulation_type': 'HiL',
+            'simulation_type': self._extract_simulation_type(component_path),
             'software_type': self._extract_software_type(component_path),
             'labcar_type': self._extract_labcar_type(component_path),
+            'test_type': None,  # Will be set from attribute
+            'test_type_path': self._extract_test_type_from_path(component_path),  # For validation
+            'test_type_mismatch': False,  # Validation flag
+            'test_version': None,  # Will be set from testVersion attribute
+            'ecu_test_version': None,  # Will be extracted from execution attribute
             'user': None,
             'lco_version': None,
             'vemox_version': None,
@@ -286,8 +291,13 @@ class ArtifactExtractor:
                     condensed['labcar_type'] = value
             elif name == 'execution' and value:
                 condensed['lco_version'] = self._extract_lco_version(value)
+                condensed['ecu_test_version'] = self._extract_ecu_test_version(value)
             elif name == 'sources' and value:
                 condensed['vemox_version'] = self._extract_vemox_version(value, version_parser)
+            elif name == 'testType':
+                condensed['test_type'] = value
+            elif name == 'testVersion':
+                condensed['test_version'] = value
 
         return {
             'name': component_data.get('name', 'Unknown'),
@@ -298,6 +308,11 @@ class ArtifactExtractor:
             'simulation_type': condensed['simulation_type'],
             'software_type': condensed['software_type'],
             'labcar_type': condensed['labcar_type'],
+            'test_type': condensed['test_type'],
+            'test_type_path': condensed['test_type_path'],
+            'test_type_mismatch': condensed['test_type_mismatch'],
+            'test_version': condensed['test_version'],
+            'ecu_test_version': condensed['ecu_test_version'],
             'user': condensed['user'],
             'lco_version': condensed['lco_version'],
             'vemox_version': condensed['vemox_version'],
@@ -328,6 +343,28 @@ class ArtifactExtractor:
                 return part
         return None
 
+    def _extract_simulation_type(self, path: str) -> Optional[str]:
+        """Extract simulation type (HiL/SiL) from path."""
+        if not path:
+            return None
+        path_parts = path.split('/')
+        if 'HiL' in path_parts:
+            return 'HiL'
+        if 'SiL' in path_parts:
+            return 'SiL'
+        return None
+
+    def _extract_test_type_from_path(self, path: str) -> Optional[str]:
+        """Extract test type from path (directory under Test/{TestType})."""
+        if not path:
+            return None
+        path_parts = path.split('/')
+        # Look for 'Test' directory and return the next part
+        for i, part in enumerate(path_parts):
+            if part == 'Test' and i + 1 < len(path_parts):
+                return path_parts[i + 1]
+        return None
+
     def _extract_lco_version(self, execution_value: Any) -> Optional[str]:
         """Extract LCO version from execution data."""
         try:
@@ -335,6 +372,20 @@ class ArtifactExtractor:
             if isinstance(execution_data, list):
                 for dep in execution_data:
                     if isinstance(dep, dict) and dep.get('dependency') == 'LCO':
+                        versions = dep.get('version', [])
+                        if versions:
+                            return versions[0]
+        except (json.JSONDecodeError, AttributeError):
+            pass
+        return None
+
+    def _extract_ecu_test_version(self, execution_value: Any) -> Optional[str]:
+        """Extract ECU-TEST version from execution data."""
+        try:
+            execution_data = json.loads(execution_value) if isinstance(execution_value, str) else execution_value
+            if isinstance(execution_data, list):
+                for dep in execution_data:
+                    if isinstance(dep, dict) and dep.get('dependency') == 'ECU-TEST':
                         versions = dep.get('version', [])
                         if versions:
                             return versions[0]
@@ -601,8 +652,52 @@ def extract_latest_artifacts(structured_data: Dict[str, Any]) -> Dict[str, Any]:
     return latest_artifacts
 
 
+def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """
+    Separate artifacts by component_type into separate data structures.
+
+    Args:
+        structured_data: Output from ArtifactExtractor.extract()
+
+    Returns:
+        Dict keyed by component_type, each containing the same structure as input
+        but only with artifacts of that component_type
+    """
+    by_component = {}
+
+    for project_name, project_data in structured_data.items():
+        project_rid = project_data['project_rid']
+
+        for sw_line_name, sw_line_data in project_data['software_lines'].items():
+            sw_line_rid = sw_line_data['software_line_rid']
+            artifacts = sw_line_data.get('artifacts', [])
+
+            for artifact in artifacts:
+                comp_type = artifact.get('component_type', 'unknown')
+
+                # Initialize structure for this component type if needed
+                if comp_type not in by_component:
+                    by_component[comp_type] = {}
+
+                if project_name not in by_component[comp_type]:
+                    by_component[comp_type][project_name] = {
+                        'project_rid': project_rid,
+                        'software_lines': {}
+                    }
+
+                if sw_line_name not in by_component[comp_type][project_name]['software_lines']:
+                    by_component[comp_type][project_name]['software_lines'][sw_line_name] = {
+                        'software_line_rid': sw_line_rid,
+                        'artifacts': []
+                    }
+
+                by_component[comp_type][project_name]['software_lines'][sw_line_name]['artifacts'].append(artifact)
+
+    return by_component
+
+
 def save_results(structured_data: Dict, output_dir: Path = None) -> Path:
-    """Save the structured data to a JSON file with timestamp."""
+    """Save the structured data to a JSON file with timestamp (legacy single file)."""
     if output_dir is None:
         if not config.CURRENT_RUN_DIR:
             raise ValueError("Run directory not configured!")
@@ -616,6 +711,49 @@ def save_results(structured_data: Dict, output_dir: Path = None) -> Path:
     logger.info("Results successfully saved")
 
     return output_file
+
+
+def save_results_by_component_type(structured_data: Dict, output_dir: Path = None) -> Dict[str, Path]:
+    """
+    Save artifacts separated by component_type to individual JSON files.
+
+    Args:
+        structured_data: Output from ArtifactExtractor.extract()
+        output_dir: Output directory (defaults to config.CURRENT_RUN_DIR)
+
+    Returns:
+        Dict mapping component_type to output file path
+    """
+    if output_dir is None:
+        if not config.CURRENT_RUN_DIR:
+            raise ValueError("Run directory not configured!")
+        output_dir = config.CURRENT_RUN_DIR
+
+    # Separate by component type
+    by_component = separate_by_component_type(structured_data)
+
+    output_files = {}
+    timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    for comp_type, comp_data in by_component.items():
+        # Create filename from component type (sanitize for filesystem)
+        safe_name = comp_type.lower().replace(' ', '_').replace('-', '_')
+        output_file = output_dir / f"{safe_name}_artifacts_{timestamp}.json"
+
+        # Count artifacts
+        artifact_count = sum(
+            len(sw['artifacts'])
+            for proj in comp_data.values()
+            for sw in proj['software_lines'].values()
+        )
+
+        logger.info(f"Saving {artifact_count} {comp_type} artifacts to: {output_file}")
+        with open(output_file, 'w', encoding='utf-8') as f:
+            json.dump(comp_data, f, indent=2, default=str)
+
+        output_files[comp_type] = output_file
+
+    return output_files
 
 
 def save_latest_artifacts(latest_artifacts: Dict[str, Any], output_dir: Path = None) -> Path:
@@ -655,8 +793,9 @@ def run_extraction() -> bool:
             logger.error("No data extracted!")
             return False
 
-        # Save all artifacts
-        save_results(structured_data)
+        # Save artifacts separated by component type
+        output_files = save_results_by_component_type(structured_data)
+        logger.info(f"Saved {len(output_files)} component type files: {list(output_files.keys())}")
 
         # Extract and save latest artifacts
         latest_artifacts = extract_latest_artifacts(structured_data)

@@ -28,6 +28,15 @@ except ImportError:
     print("Install it with: pip install wxPython")
     print("Note: On Linux, you may need: sudo apt-get install python3-wxgtk4.0")
 
+# openpyxl for Excel export
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+
 if TYPE_CHECKING:
     import wx  # type: ignore[import-untyped]
 
@@ -39,6 +48,98 @@ except ImportError:
     DATE_DISPLAY_FORMAT = "%d-%m-%Y %H:%M:%S"
     TIS_LINK_TEMPLATE = "https://rb-ps-tis-dashboard.bosch.com/?gotoCompInstanceId={}"
     OUTPUT_DIR = Path(__file__).parent.parent / "output"
+
+
+# Column definitions per artifact type (component_type)
+# Format: (key, header, min_width, weight, data_key)
+# Common columns shared by all artifact types
+COMMON_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    ("user", "User", 70, 0, "user"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
+    ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# Columns specific to vVeh_LCO artifacts
+VVEH_LCO_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    ("simulation_type", "Simulation Type", 70, 0, "simulation_type"),
+    ("software_type", "Software Type", 60, 0, "software_type"),
+    ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
+    ("user", "User", 70, 0, "user"),
+    ("lco_version", "LCO Version", 80, 1, "lco_version"),
+    ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
+    ("is_genuine_build", "Is Genuine Build", 55, 0, "is_genuine_build"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("release_date_time", "Release Date Time", 90, 0, "release_date_time"),
+    ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
+    ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
+    ("build_type", "Build Type", 60, 0, "build_type"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# Columns specific to test_ECU-TEST artifacts
+TEST_ECU_TEST_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    ("test_type", "Test Type", 60, 0, "test_type"),
+    ("test_version", "Test Version", 70, 0, "test_version"),
+    ("ecu_test_version", "ECU-TEST Version", 80, 0, "ecu_test_version"),
+    ("user", "User", 70, 0, "user"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
+    ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# All columns combined (for "All" filter or unknown types)
+ALL_COLUMNS = [
+    ("project", "Project", 120, 1, "_project"),
+    ("sw_line", "Software Line", 120, 1, "_sw_line"),
+    ("name", "Name", 180, 3, "name"),
+    ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
+    ("created_date", "Created Date", 90, 0, "created_date"),
+    ("component_type", "Component Type", 75, 1, "component_type"),
+    ("simulation_type", "Simulation Type", 70, 0, "simulation_type"),
+    ("software_type", "Software Type", 60, 0, "software_type"),
+    ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
+    ("test_type", "Test Type", 60, 0, "test_type"),
+    ("test_version", "Test Version", 70, 0, "test_version"),
+    ("ecu_test_version", "ECU-TEST Version", 80, 0, "ecu_test_version"),
+    ("user", "User", 70, 0, "user"),
+    ("lco_version", "LCO Version", 80, 1, "lco_version"),
+    ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
+    ("is_genuine_build", "Is Genuine Build", 55, 0, "is_genuine_build"),
+    ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
+    ("release_date_time", "Release Date Time", 90, 0, "release_date_time"),
+    ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
+    ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
+    ("build_type", "Build Type", 60, 0, "build_type"),
+    ("upload_path", "Upload Path", 200, 3, "upload_path"),
+]
+
+# Mapping of component_type to column definitions
+COMPONENT_COLUMNS = {
+    "vVeh_LCO": VVEH_LCO_COLUMNS,
+    "test_ECU-TEST": TEST_ECU_TEST_COLUMNS,
+    # Add more component types as needed
+}
 
 
 class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
@@ -59,31 +160,11 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         self.sort_column: int = -1  # -1 = no sort
         self.sort_ascending: bool = True
 
-        # Column definitions: (key, header, min_width, weight, data_key)
-        # weight determines how much of extra space the column gets
-        # data_key is the artifact dict key to use for this column
-        # All columns from JSON data with proper naming
-        self.columns = [
-            ("project", "Project", 120, 1, "_project"),
-            ("sw_line", "Software Line", 120, 1, "_sw_line"),
-            ("name", "Name", 180, 3, "name"),
-            ("artifact_rid", "Artifact RID", 55, 0, "artifact_rid"),
-            ("created_date", "Created Date", 90, 0, "created_date"),
-            ("component_type", "Component Type", 75, 1, "component_type"),
-            ("simulation_type", "Simulation Type", 70, 0, "simulation_type"),
-            ("software_type", "Software Type", 60, 0, "software_type"),
-            ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
-            ("user", "User", 70, 0, "user"),
-            ("lco_version", "LCO Version", 80, 1, "lco_version"),
-            ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
-            ("is_genuine_build", "Is Genuine Build", 55, 0, "is_genuine_build"),
-            ("life_cycle_status", "Life Cycle Status", 65, 0, "life_cycle_status"),
-            ("release_date_time", "Release Date Time", 90, 0, "release_date_time"),
-            ("is_deleted", "Is Deleted", 55, 0, "is_deleted"),
-            ("deleted_date", "Deleted Date", 80, 0, "deleted_date"),
-            ("build_type", "Build Type", 60, 0, "build_type"),
-            ("upload_path", "Upload Path", 200, 3, "upload_path"),
-        ]
+        # Column definitions - use ALL_COLUMNS as default (dynamic based on component_type)
+        self.columns = list(ALL_COLUMNS)
+
+        # Track visible columns (non-empty ones) - must be after self.columns is defined
+        self.visible_columns: List[int] = list(range(len(self.columns)))
 
         self._create_ui()
 
@@ -112,6 +193,10 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         latest_btn.Bind(wx.EVT_BUTTON, self._on_open_latest)
         toolbar_sizer.Add(latest_btn, 0, wx.ALL, 5)
 
+        export_btn = wx.Button(self.panel, label="Export to Excel")
+        export_btn.Bind(wx.EVT_BUTTON, self._on_export_excel)
+        toolbar_sizer.Add(export_btn, 0, wx.ALL, 5)
+
         self.file_label = wx.StaticText(self.panel, label="No file loaded")
         toolbar_sizer.Add(self.file_label, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
 
@@ -121,29 +206,32 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         filter_box = wx.StaticBox(self.panel, label="Filters (click column headers to sort)")
         filter_sizer = wx.StaticBoxSizer(filter_box, wx.VERTICAL)
 
-        # Row 1: Filter dropdowns
+        # Row 1: Component type first (defines artifact type), then project/sw_line
         row1 = wx.BoxSizer(wx.HORIZONTAL)
+        self._add_filter(row1, "component_type", "Artifact Type:", 140, is_component_type=True)
         self._add_filter(row1, "project", "Project:", 140)
         self._add_filter(row1, "sw_line", "SW Line:", 180)
-        self._add_filter(row1, "component_type", "Component:", 120)
-        self._add_filter(row1, "simulation_type", "Simulation:", 120)
-        self._add_filter(row1, "software_type", "SW Type:", 180)
-        self._add_filter(row1, "labcar_type", "Labcar:", 120)
+        self._add_filter(row1, "life_cycle_status", "Status:", 100)
+        self._add_filter(row1, "user", "User:", 100)
         filter_sizer.Add(row1, 0, wx.EXPAND | wx.ALL, 2)
 
-        # Row 2: More filters
+        # Row 2: Type-specific filters (will be shown/hidden based on component_type)
         row2 = wx.BoxSizer(wx.HORIZONTAL)
-        self._add_filter(row2, "life_cycle_status", "Status:", 100)
-        self._add_filter(row2, "user", "User:", 100)
-        self._add_filter(row2, "lco_version", "LCO:", 180)
-        self._add_filter(row2, "vemox_version", "VeMoX:", 180)
-        self._add_filter(row2, "build_type", "Build Type:", 100)
+        self._add_filter(row2, "simulation_type", "Simulation:", 100)
+        self._add_filter(row2, "software_type", "SW Type:", 120)
+        self._add_filter(row2, "labcar_type", "Labcar:", 100)
+        self._add_filter(row2, "test_type", "Test Type:", 80)
+        self._add_filter(row2, "test_version", "Test Ver:", 80)
+        self._add_filter(row2, "ecu_test_version", "ECU-TEST:", 100)
+        self._add_filter(row2, "lco_version", "LCO:", 150)
+        self._add_filter(row2, "vemox_version", "VeMoX:", 150)
         filter_sizer.Add(row2, 0, wx.EXPAND | wx.ALL, 2)
 
-        # Row 3: Boolean filters and search
+        # Row 3: Boolean filters, build type, and search
         row3 = wx.BoxSizer(wx.HORIZONTAL)
         self._add_filter(row3, "is_deleted", "Deleted:", 70)
         self._add_filter(row3, "is_genuine_build", "Genuine:", 70)
+        self._add_filter(row3, "build_type", "Build:", 80)
         row3.Add(wx.StaticText(self.panel, label="Search:"), 0,
                  wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 10)
         self.search_ctrl = wx.TextCtrl(self.panel, size=(150, -1))
@@ -203,11 +291,11 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         # Ensure proper layout
         self.Layout()
 
-        # Initial column width adjustment
-        wx.CallAfter(self._adjust_column_widths)
+        # Initial column width adjustment (all columns visible initially)
+        wx.CallAfter(self._adjust_column_widths_visible, self.visible_columns)
 
     def _add_filter(self, sizer: Any, key: str, label: str, width: int,
-                    choices: Optional[List[str]] = None):
+                    choices: Optional[List[str]] = None, is_component_type: bool = False):
         """Add a filter combo box."""
         sizer.Add(wx.StaticText(self.panel, label=label), 0,
                   wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 5)
@@ -218,7 +306,13 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         combo = wx.ComboBox(self.panel, choices=choices, style=wx.CB_READONLY,
                            size=(width, -1))
         combo.SetSelection(0)
-        combo.Bind(wx.EVT_COMBOBOX, self._on_filter_changed)
+
+        # Component type filter gets special handling to update columns
+        if is_component_type:
+            combo.Bind(wx.EVT_COMBOBOX, self._on_component_type_changed)
+        else:
+            combo.Bind(wx.EVT_COMBOBOX, self._on_filter_changed)
+
         sizer.Add(combo, 0, wx.ALL, 2)
         self.filter_combos[key] = combo
 
@@ -227,7 +321,7 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         event.Skip()  # Allow default resize handling
 
         # Delay column resize to after layout is complete
-        wx.CallAfter(self._adjust_column_widths)
+        wx.CallAfter(self._adjust_column_widths_visible, self.visible_columns)
 
     def _adjust_column_widths(self):
         """Adjust column widths based on available space."""
@@ -254,6 +348,35 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
                 new_width = min_width
             self.list_ctrl.SetColumnWidth(i, new_width)
 
+    def _adjust_column_widths_visible(self, visible_cols: List[int]):
+        """Adjust column widths based on available space, only for visible columns."""
+        if not hasattr(self, 'list_ctrl') or not self.list_ctrl:
+            return
+
+        # Get available width (subtract scrollbar width)
+        available_width = self.list_ctrl.GetClientSize().width - 20
+
+        # Calculate total minimum width and total weight for visible columns only
+        total_min_width = sum(self.columns[i][2] for i in visible_cols)
+        total_weight = sum(self.columns[i][3] for i in visible_cols)
+
+        # Calculate extra space to distribute
+        extra_space = max(0, available_width - total_min_width)
+
+        # Set each column width
+        for i, (key, header, min_width, weight, data_key) in enumerate(self.columns):
+            if i in visible_cols:
+                if total_weight > 0 and extra_space > 0:
+                    # Distribute extra space proportionally by weight
+                    extra = int(extra_space * weight / total_weight)
+                    new_width = min_width + extra
+                else:
+                    new_width = min_width
+                self.list_ctrl.SetColumnWidth(i, new_width)
+            else:
+                # Keep hidden columns at 0 width
+                self.list_ctrl.SetColumnWidth(i, 0)
+
     def _on_column_click(self, event: Any):
         """Handle column header click for sorting."""
         col = event.GetColumn()
@@ -279,6 +402,44 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         self.sort_label.SetLabel("")
         self._apply_filters()
 
+    def _on_component_type_changed(self, event: Any):
+        """Handle component type filter change - update columns dynamically."""
+        selected = self.filter_combos["component_type"].GetStringSelection()
+
+        # Get columns for selected component type
+        if selected == "All" or selected not in COMPONENT_COLUMNS:
+            new_columns = list(ALL_COLUMNS)
+        else:
+            new_columns = list(COMPONENT_COLUMNS[selected])
+
+        # Only rebuild if columns actually changed
+        if new_columns != self.columns:
+            self._rebuild_columns(new_columns)
+
+        # Reset sort when changing component type
+        self.sort_column = -1
+        self.sort_ascending = True
+        self.sort_label.SetLabel("")
+
+        # Apply filters (this also handles the component_type filter)
+        self._apply_filters()
+
+    def _rebuild_columns(self, new_columns: List):
+        """Rebuild list control columns with new column definitions."""
+        self.columns = new_columns
+        self.visible_columns = list(range(len(self.columns)))
+
+        # Delete all existing columns
+        self.list_ctrl.DeleteAllItems()
+        self.list_ctrl.DeleteAllColumns()
+
+        # Add new columns
+        for i, (key, header, min_width, weight, data_key) in enumerate(self.columns):
+            self.list_ctrl.InsertColumn(i, header, width=min_width)
+
+        # Adjust widths
+        wx.CallAfter(self._adjust_column_widths_visible, self.visible_columns)
+
     def _on_open_file(self, event):
         """Open file dialog."""
         initial_dir = str(OUTPUT_DIR) if OUTPUT_DIR.exists() else str(Path.home())
@@ -295,7 +456,7 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         dlg.Destroy()
 
     def _on_open_latest(self, event):
-        """Open most recent output file."""
+        """Open most recent output file - shows dialog to choose artifact type if multiple."""
         if not OUTPUT_DIR.exists():
             wx.MessageBox(f"Output directory not found:\n{OUTPUT_DIR}",
                          "Warning", wx.OK | wx.ICON_WARNING)
@@ -306,14 +467,186 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             wx.MessageBox("No output runs found.", "Info", wx.OK | wx.ICON_INFORMATION)
             return
 
+        # Find all artifact files in the most recent run
         for run_dir in run_dirs:
-            json_files = list(run_dir.glob("vveh_lco_artifacts_*.json"))
+            json_files = list(run_dir.glob("*_artifacts_*.json"))
+            # Exclude 'latest_' prefixed files
+            json_files = [f for f in json_files if not f.name.startswith("latest_")]
+
             if json_files:
-                latest_file = max(json_files, key=lambda x: x.stat().st_mtime)
-                self._load_file(latest_file)
+                if len(json_files) == 1:
+                    # Only one file, load it directly
+                    self._load_file(json_files[0])
+                else:
+                    # Multiple files, let user choose
+                    choices = [f.name for f in json_files]
+                    dlg = wx.SingleChoiceDialog(
+                        self,
+                        f"Multiple artifact files found in {run_dir.name}.\nSelect file to open:",
+                        "Select Artifact File",
+                        choices
+                    )
+                    if dlg.ShowModal() == wx.ID_OK:
+                        selected_idx = dlg.GetSelection()
+                        self._load_file(json_files[selected_idx])
+                    dlg.Destroy()
                 return
 
         wx.MessageBox("No artifact JSON files found.", "Info", wx.OK | wx.ICON_INFORMATION)
+
+    def _on_export_excel(self, event):
+        """Export filtered artifacts to Excel."""
+        if not OPENPYXL_AVAILABLE:
+            wx.MessageBox(
+                "openpyxl is not installed.\nInstall it with: pip install openpyxl",
+                "Export Error", wx.OK | wx.ICON_ERROR
+            )
+            return
+
+        if not self.filtered_artifacts:
+            wx.MessageBox("No artifacts to export.", "Info", wx.OK | wx.ICON_INFORMATION)
+            return
+
+        # Get current filters for filename
+        active_filters = []
+        for key, combo in self.filter_combos.items():
+            value = combo.GetStringSelection()
+            if value != "All":
+                active_filters.append(f"{key}={value}")
+
+        # Generate default filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"artifacts_export_{timestamp}.xlsx"
+
+        # Open save dialog
+        dlg = wx.FileDialog(
+            self, "Export to Excel",
+            defaultDir=str(OUTPUT_DIR) if OUTPUT_DIR.exists() else str(Path.home()),
+            defaultFile=default_name,
+            wildcard="Excel files (*.xlsx)|*.xlsx",
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT
+        )
+
+        if dlg.ShowModal() != wx.ID_OK:
+            dlg.Destroy()
+            return
+
+        filepath = Path(dlg.GetPath())
+        dlg.Destroy()
+
+        try:
+            self._export_to_excel(filepath, active_filters)
+            self.status_bar.SetStatusText(f"Exported {len(self.filtered_artifacts)} artifacts to {filepath.name}")
+            wx.MessageBox(
+                f"Successfully exported {len(self.filtered_artifacts)} artifacts.\n\n"
+                f"File: {filepath}",
+                "Export Complete", wx.OK | wx.ICON_INFORMATION
+            )
+        except Exception as e:
+            wx.MessageBox(f"Export failed:\n{e}", "Export Error", wx.OK | wx.ICON_ERROR)
+
+    def _export_to_excel(self, filepath: Path, active_filters: List[str]):
+        """Export filtered artifacts to Excel file."""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Filtered Artifacts"
+
+        # Styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # Get non-empty columns only
+        non_empty_cols = self._get_non_empty_columns()
+        visible_columns = [self.columns[i] for i in non_empty_cols]
+
+        # Write filter info at top
+        if active_filters:
+            ws['A1'] = "Active Filters:"
+            ws['A1'].font = Font(bold=True)
+            ws['B1'] = ", ".join(active_filters)
+            ws.merge_cells('B1:E1')
+            start_row = 3
+        else:
+            ws['A1'] = "No filters applied (showing all artifacts)"
+            ws['A1'].font = Font(italic=True)
+            start_row = 3
+
+        # Write headers (only non-empty columns)
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(visible_columns, 1):
+            cell = ws.cell(row=start_row, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+
+        # Write data (only non-empty columns)
+        for row_idx, artifact in enumerate(self.filtered_artifacts, start_row + 1):
+            for col_idx, (key, header, min_width, weight, data_key) in enumerate(visible_columns, 1):
+                value = artifact.get(data_key, '')
+                # Format boolean values
+                if value is True:
+                    value = "Yes"
+                elif value is False:
+                    value = "No"
+                elif value is None:
+                    value = ""
+
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = thin_border
+
+        # Auto-adjust column widths (only non-empty columns)
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(visible_columns, 1):
+            # Calculate max width based on content
+            max_length = len(header)
+            for row_idx in range(start_row + 1, start_row + 1 + len(self.filtered_artifacts)):
+                cell_value = ws.cell(row=row_idx, column=col_idx).value
+                if cell_value:
+                    max_length = max(max_length, len(str(cell_value)))
+            # Cap width at 50 characters
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
+
+        # Freeze header row
+        ws.freeze_panes = ws.cell(row=start_row + 1, column=1)
+
+        # Add summary sheet
+        summary_ws = wb.create_sheet(title="Summary")
+        summary_ws['A1'] = "Export Summary"
+        summary_ws['A1'].font = Font(bold=True, size=14)
+
+        summary_data = [
+            ("Export Date", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            ("Source File", self.current_file.name if self.current_file else "N/A"),
+            ("Total Artifacts in File", len(self.all_artifacts)),
+            ("Filtered Artifacts Exported", len(self.filtered_artifacts)),
+            ("", ""),
+            ("Active Filters", ""),
+        ]
+
+        for row_idx, (label, value) in enumerate(summary_data, 3):
+            summary_ws.cell(row=row_idx, column=1, value=label).font = Font(bold=True)
+            summary_ws.cell(row=row_idx, column=2, value=value)
+
+        # Add filter details
+        filter_row = len(summary_data) + 3
+        if active_filters:
+            for i, f in enumerate(active_filters):
+                summary_ws.cell(row=filter_row + i, column=2, value=f)
+        else:
+            summary_ws.cell(row=filter_row, column=2, value="None (all artifacts shown)")
+
+        summary_ws.column_dimensions['A'].width = 25
+        summary_ws.column_dimensions['B'].width = 50
+
+        # Save workbook
+        wb.save(filepath)
 
     def _load_file(self, file_path: Path):
         """Load and parse JSON file."""
@@ -396,6 +729,9 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             'simulation_type': set(),
             'software_type': set(),
             'labcar_type': set(),
+            'test_type': set(),
+            'test_version': set(),
+            'ecu_test_version': set(),
             'lco_version': set(),
             'vemox_version': set(),
             'build_type': set(),
@@ -425,6 +761,12 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
                 unique_values['software_type'].add(str(artifact['software_type']))
             if artifact.get('labcar_type'):
                 unique_values['labcar_type'].add(str(artifact['labcar_type']))
+            if artifact.get('test_type'):
+                unique_values['test_type'].add(str(artifact['test_type']))
+            if artifact.get('test_version'):
+                unique_values['test_version'].add(str(artifact['test_version']))
+            if artifact.get('ecu_test_version'):
+                unique_values['ecu_test_version'].add(str(artifact['ecu_test_version']))
             if artifact.get('lco_version'):
                 unique_values['lco_version'].add(str(artifact['lco_version']))
             if artifact.get('vemox_version'):
@@ -545,6 +887,18 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
                 if str(artifact.get('software_type', '') or '') != filters['software_type']:
                     continue
 
+            if filters.get('test_type', 'All') != "All":
+                if str(artifact.get('test_type', '') or '') != filters['test_type']:
+                    continue
+
+            if filters.get('test_version', 'All') != "All":
+                if str(artifact.get('test_version', '') or '') != filters['test_version']:
+                    continue
+
+            if filters.get('ecu_test_version', 'All') != "All":
+                if str(artifact.get('ecu_test_version', '') or '') != filters['ecu_test_version']:
+                    continue
+
             if filters.get('lco_version', 'All') != "All":
                 if str(artifact.get('lco_version', '') or '') != filters['lco_version']:
                     continue
@@ -636,10 +990,39 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         else:
             return str(value)
 
+    def _get_non_empty_columns(self) -> List[int]:
+        """Get indices of columns that have at least one non-empty value in filtered artifacts."""
+        non_empty_cols = []
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns):
+            has_value = False
+            for artifact in self.filtered_artifacts:
+                value = artifact.get(data_key)
+                # Check if value is non-empty (not None, not empty string, not False for non-boolean)
+                if value is not None and value != '':
+                    has_value = True
+                    break
+            if has_value:
+                non_empty_cols.append(col_idx)
+        return non_empty_cols
+
     def _populate_list(self):
         """Populate the list control with filtered artifacts."""
         self.list_ctrl.DeleteAllItems()
 
+        # Get columns that have at least one non-empty value
+        non_empty_cols = self._get_non_empty_columns()
+        self.visible_columns = non_empty_cols  # Store for resize handler
+
+        # Hide empty columns, show non-empty ones
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns):
+            if col_idx in non_empty_cols:
+                # Show column with appropriate width
+                self.list_ctrl.SetColumnWidth(col_idx, min_width)
+            else:
+                # Hide column by setting width to 0
+                self.list_ctrl.SetColumnWidth(col_idx, 0)
+
+        # Populate rows
         for idx, artifact in enumerate(self.filtered_artifacts):
             # Dynamically populate all columns based on column definitions
             for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns):
@@ -650,6 +1033,9 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
                     self.list_ctrl.InsertItem(idx, cell_text)
                 else:
                     self.list_ctrl.SetItem(idx, col_idx, cell_text)
+
+        # Re-adjust column widths for visible columns
+        wx.CallAfter(self._adjust_column_widths_visible, non_empty_cols)
 
     def _get_selected_artifact(self) -> Optional[Dict]:
         """Get the currently selected artifact."""

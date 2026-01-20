@@ -57,6 +57,8 @@ class DeviationType(Enum):
     # Naming deviations
     INVALID_NAME_FORMAT = "INVALID_NAME_FORMAT"
     NAME_MISMATCH = "NAME_MISMATCH"
+    # Attribute deviations
+    TEST_TYPE_MISMATCH = "TEST_TYPE_MISMATCH"
 
 
 @dataclass
@@ -67,9 +69,14 @@ class ArtifactInfo:
     component_type: Optional[str] = None
     component_type_category: Optional[str] = None
     component_grp: Optional[str] = None
-    simulation_type: str = "HiL"
+    simulation_type: Optional[str] = None
     software_type: Optional[str] = None
     labcar_type: Optional[str] = None
+    test_type: Optional[str] = None
+    test_type_path: Optional[str] = None
+    test_type_mismatch: bool = False
+    test_version: Optional[str] = None
+    ecu_test_version: Optional[str] = None
     user: Optional[str] = None
     lco_version: Optional[str] = None
     vemox_version: Optional[str] = None
@@ -93,6 +100,11 @@ class ArtifactInfo:
             'simulation_type': self.simulation_type,
             'software_type': self.software_type,
             'labcar_type': self.labcar_type,
+            'test_type': self.test_type,
+            'test_type_path': self.test_type_path,
+            'test_type_mismatch': self.test_type_mismatch,
+            'test_version': self.test_version,
+            'ecu_test_version': self.ecu_test_version,
             'user': self.user,
             'lco_version': self.lco_version,
             'vemox_version': self.vemox_version,
@@ -115,9 +127,14 @@ class ArtifactInfo:
             component_type=data.get('component_type'),
             component_type_category=data.get('component_type_category'),
             component_grp=data.get('component_grp'),
-            simulation_type=data.get('simulation_type', 'HiL'),
+            simulation_type=data.get('simulation_type'),
             software_type=data.get('software_type'),
             labcar_type=data.get('labcar_type'),
+            test_type=data.get('test_type'),
+            test_type_path=data.get('test_type_path'),
+            test_type_mismatch=data.get('test_type_mismatch', False),
+            test_version=data.get('test_version'),
+            ecu_test_version=data.get('ecu_test_version'),
             user=data.get('user'),
             lco_version=data.get('lco_version'),
             vemox_version=data.get('vemox_version'),
