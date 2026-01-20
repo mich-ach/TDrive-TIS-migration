@@ -82,32 +82,32 @@
             },
             "hil_model_platform": {
                 "description": "HiL Model with platform: [timestamp -] VW MDL[_HiL]_<platform> : <ECU> / <variant>",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_HiL)?_(?P<platform>PCIe|VME)\\s*:\\s*(?P<ecu>[^/]+)\\s*/\\s*(?P<variant>.+?)(?:;\\d+)?$",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_HiL)?_(?P<platform>PCIe|VME)\\s*:\\s*(?P<ecu>[^/]+)\\s*/\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
                 "example": "VW MDL_HiL_PCIe : MG1CS211_C_EA211Evo / 110kW_OPF_DQ_CANv7"
             },
             "mdl_model": {
                 "description": "MDL Model (HiL/SiL optional): [timestamp -] VW MDL[_HiL|_SiL] : <ECU> / <variant>",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_(?P<type>HiL|SiL))?\\s*:\\s*(?P<ecu>[^/]+)\\s*/\\s*(?P<variant>.+?)(?:;\\d+)?$",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+MDL(?:_(?P<type>HiL|SiL))?\\s*:\\s*(?P<ecu>[^/]+)\\s*/\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
                 "example": "VW MDL : MG1CS038_C3 / V8T_Stereo_DCT_FX_v8"
             },
             "vveh_lco": {
                 "description": "vVeh_LCO artifact: [timestamp -] VW vVeh_LCO : <SW> / <PVER> [<dataset>] <variant>",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_LCO\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;\\d+)?$",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_LCO\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
                 "example": "VW vVeh_LCO : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
             },
             "vveh_frame": {
                 "description": "vVehFrame: [timestamp -] VW vVehFrame_<env> : <SW> / <PVER> [<dataset>] <variant>",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVehFrame_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;\\d+)?$",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVehFrame_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
                 "example": "VW vVehFrame_Silver : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
             },
             "setup_skeleton": {
                 "description": "SetupSkeleton: [timestamp -] VW SetupSkeleton_<env> : <SW> / <PVER> [<dataset>] <variant>",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+SetupSkeleton_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;\\d+)?$",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+SetupSkeleton_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
                 "example": "VW SetupSkeleton_Silver : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
             },
             "vveh_complete": {
                 "description": "vVeh complete workspace: [timestamp -] VW vVeh_<env> : <SW> / <PVER> [<dataset>] <variant>",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;\\d+)?$",
+                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_(?P<env>Silver|FMU)\\s*:\\s*(?P<sw>[^/]+)\\s*/\\s*(?P<pver>\\S+)\\s*\\[(?P<dataset>[^\\]]*)\\]\\s*(?P<variant>.+?)(?:;[a-zA-Z0-9]+)?$",
                 "example": "VW vVeh_Silver : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
             }
         }
