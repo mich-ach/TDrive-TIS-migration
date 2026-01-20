@@ -293,11 +293,6 @@ class ArtifactExtractor:
                 condensed['vemox_version'] = self._extract_vemox_version(value, version_parser)
             elif name == 'testType':
                 condensed['test_type'] = value
-                # Validate: check if testType matches the path Test/{TestType}
-                path_test_type = condensed['test_type_path']
-                if path_test_type and value and path_test_type != value:
-                    condensed['test_type_mismatch'] = True
-                    logger.warning(f"Test type mismatch: attribute='{value}' vs path='{path_test_type}'")
 
         return {
             'name': component_data.get('name', 'Unknown'),

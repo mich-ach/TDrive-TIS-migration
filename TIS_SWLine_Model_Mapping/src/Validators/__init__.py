@@ -285,6 +285,70 @@ class PathValidator:
             return 'SiL'
         return None
 
+    def validate_test_type(
+        self,
+        component_name: str,
+        test_type_attribute: Optional[str],
+        upload_path: str
+    ) -> Tuple[DeviationType, str, str]:
+        """
+        Validate that testType attribute matches the path Test/{TestType}.
+
+        This validation is component-specific and only applies to certain
+        component types (e.g., 'test_ECU-TEST').
+
+        Args:
+            component_name: The component type name
+            test_type_attribute: The testType value from the API attribute
+            upload_path: The artifact's upload path
+
+        Returns:
+            Tuple of (DeviationType, details, expected_path_hint)
+        """
+        # List of component types that require test_type validation
+        test_type_components = ['test_ECU-TEST']
+
+        # Only validate for specific component types
+        if not component_name or component_name not in test_type_components:
+            return (DeviationType.VALID, "", "")
+
+        # Extract test type from path (looking for Test/{TestType} pattern)
+        test_type_from_path = self._extract_test_type_from_path(upload_path)
+
+        # If no test type in path or attribute, nothing to validate
+        if not test_type_from_path and not test_type_attribute:
+            return (DeviationType.VALID, "", "")
+
+        # Check for mismatch
+        if test_type_from_path and test_type_attribute:
+            if test_type_from_path != test_type_attribute:
+                return (
+                    DeviationType.TEST_TYPE_MISMATCH,
+                    f"testType attribute '{test_type_attribute}' does not match path 'Test/{test_type_from_path}'",
+                    f"Expected testType='{test_type_from_path}' based on path, or move artifact to Test/{test_type_attribute}/"
+                )
+
+        return (DeviationType.VALID, "", "")
+
+    def _extract_test_type_from_path(self, path: str) -> Optional[str]:
+        """
+        Extract test type from path by looking for Test/{TestType} pattern.
+
+        Args:
+            path: The artifact's upload path
+
+        Returns:
+            The test type string if found, None otherwise
+        """
+        if not path:
+            return None
+
+        path_parts = path.split('/')
+        for i, part in enumerate(path_parts):
+            if part == 'Test' and i + 1 < len(path_parts):
+                return path_parts[i + 1]
+        return None
+
 
 def validate_path_simple(path: str) -> Tuple[DeviationType, str, str]:
     """

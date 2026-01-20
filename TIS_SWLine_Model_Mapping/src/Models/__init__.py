@@ -57,6 +57,8 @@ class DeviationType(Enum):
     # Naming deviations
     INVALID_NAME_FORMAT = "INVALID_NAME_FORMAT"
     NAME_MISMATCH = "NAME_MISMATCH"
+    # Attribute deviations
+    TEST_TYPE_MISMATCH = "TEST_TYPE_MISMATCH"
 
 
 @dataclass
