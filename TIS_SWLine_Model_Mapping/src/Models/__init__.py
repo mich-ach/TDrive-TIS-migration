@@ -67,9 +67,10 @@ class ArtifactInfo:
     component_type: Optional[str] = None
     component_type_category: Optional[str] = None
     component_grp: Optional[str] = None
-    simulation_type: str = "HiL"
+    simulation_type: Optional[str] = None
     software_type: Optional[str] = None
     labcar_type: Optional[str] = None
+    test_type: Optional[str] = None
     user: Optional[str] = None
     lco_version: Optional[str] = None
     vemox_version: Optional[str] = None
@@ -93,6 +94,7 @@ class ArtifactInfo:
             'simulation_type': self.simulation_type,
             'software_type': self.software_type,
             'labcar_type': self.labcar_type,
+            'test_type': self.test_type,
             'user': self.user,
             'lco_version': self.lco_version,
             'vemox_version': self.vemox_version,
@@ -115,9 +117,10 @@ class ArtifactInfo:
             component_type=data.get('component_type'),
             component_type_category=data.get('component_type_category'),
             component_grp=data.get('component_grp'),
-            simulation_type=data.get('simulation_type', 'HiL'),
+            simulation_type=data.get('simulation_type'),
             software_type=data.get('software_type'),
             labcar_type=data.get('labcar_type'),
+            test_type=data.get('test_type'),
             user=data.get('user'),
             lco_version=data.get('lco_version'),
             vemox_version=data.get('vemox_version'),

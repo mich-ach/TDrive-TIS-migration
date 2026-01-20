@@ -28,6 +28,15 @@ except ImportError:
     print("Install it with: pip install wxPython")
     print("Note: On Linux, you may need: sudo apt-get install python3-wxgtk4.0")
 
+# openpyxl for Excel export
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
+
 if TYPE_CHECKING:
     import wx  # type: ignore[import-untyped]
 
@@ -73,6 +82,7 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             ("simulation_type", "Simulation Type", 70, 0, "simulation_type"),
             ("software_type", "Software Type", 60, 0, "software_type"),
             ("labcar_type", "Labcar Type", 60, 0, "labcar_type"),
+            ("test_type", "Test Type", 60, 0, "test_type"),
             ("user", "User", 70, 0, "user"),
             ("lco_version", "LCO Version", 80, 1, "lco_version"),
             ("vemox_version", "Vemox Version", 80, 0, "vemox_version"),
@@ -112,6 +122,10 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         latest_btn.Bind(wx.EVT_BUTTON, self._on_open_latest)
         toolbar_sizer.Add(latest_btn, 0, wx.ALL, 5)
 
+        export_btn = wx.Button(self.panel, label="Export to Excel")
+        export_btn.Bind(wx.EVT_BUTTON, self._on_export_excel)
+        toolbar_sizer.Add(export_btn, 0, wx.ALL, 5)
+
         self.file_label = wx.StaticText(self.panel, label="No file loaded")
         toolbar_sizer.Add(self.file_label, 0, wx.ALL | wx.ALIGN_CENTER_VERTICAL, 5)
 
@@ -135,6 +149,7 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
         row2 = wx.BoxSizer(wx.HORIZONTAL)
         self._add_filter(row2, "life_cycle_status", "Status:", 100)
         self._add_filter(row2, "user", "User:", 100)
+        self._add_filter(row2, "test_type", "Test Type:", 80)
         self._add_filter(row2, "lco_version", "LCO:", 180)
         self._add_filter(row2, "vemox_version", "VeMoX:", 180)
         self._add_filter(row2, "build_type", "Build Type:", 100)
@@ -315,6 +330,157 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
 
         wx.MessageBox("No artifact JSON files found.", "Info", wx.OK | wx.ICON_INFORMATION)
 
+    def _on_export_excel(self, event):
+        """Export filtered artifacts to Excel."""
+        if not OPENPYXL_AVAILABLE:
+            wx.MessageBox(
+                "openpyxl is not installed.\nInstall it with: pip install openpyxl",
+                "Export Error", wx.OK | wx.ICON_ERROR
+            )
+            return
+
+        if not self.filtered_artifacts:
+            wx.MessageBox("No artifacts to export.", "Info", wx.OK | wx.ICON_INFORMATION)
+            return
+
+        # Get current filters for filename
+        active_filters = []
+        for key, combo in self.filter_combos.items():
+            value = combo.GetStringSelection()
+            if value != "All":
+                active_filters.append(f"{key}={value}")
+
+        # Generate default filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"artifacts_export_{timestamp}.xlsx"
+
+        # Open save dialog
+        dlg = wx.FileDialog(
+            self, "Export to Excel",
+            defaultDir=str(OUTPUT_DIR) if OUTPUT_DIR.exists() else str(Path.home()),
+            defaultFile=default_name,
+            wildcard="Excel files (*.xlsx)|*.xlsx",
+            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT
+        )
+
+        if dlg.ShowModal() != wx.ID_OK:
+            dlg.Destroy()
+            return
+
+        filepath = Path(dlg.GetPath())
+        dlg.Destroy()
+
+        try:
+            self._export_to_excel(filepath, active_filters)
+            self.status_bar.SetStatusText(f"Exported {len(self.filtered_artifacts)} artifacts to {filepath.name}")
+            wx.MessageBox(
+                f"Successfully exported {len(self.filtered_artifacts)} artifacts.\n\n"
+                f"File: {filepath}",
+                "Export Complete", wx.OK | wx.ICON_INFORMATION
+            )
+        except Exception as e:
+            wx.MessageBox(f"Export failed:\n{e}", "Export Error", wx.OK | wx.ICON_ERROR)
+
+    def _export_to_excel(self, filepath: Path, active_filters: List[str]):
+        """Export filtered artifacts to Excel file."""
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Filtered Artifacts"
+
+        # Styles
+        header_font = Font(bold=True, color="FFFFFF")
+        header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+        header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        thin_border = Border(
+            left=Side(style='thin'),
+            right=Side(style='thin'),
+            top=Side(style='thin'),
+            bottom=Side(style='thin')
+        )
+
+        # Write filter info at top
+        if active_filters:
+            ws['A1'] = "Active Filters:"
+            ws['A1'].font = Font(bold=True)
+            ws['B1'] = ", ".join(active_filters)
+            ws.merge_cells('B1:E1')
+            start_row = 3
+        else:
+            ws['A1'] = "No filters applied (showing all artifacts)"
+            ws['A1'].font = Font(italic=True)
+            start_row = 3
+
+        # Write headers
+        headers = [col[1] for col in self.columns]  # Get display names
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws.cell(row=start_row, column=col_idx, value=header)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = header_alignment
+            cell.border = thin_border
+
+        # Write data
+        for row_idx, artifact in enumerate(self.filtered_artifacts, start_row + 1):
+            for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns, 1):
+                value = artifact.get(data_key, '')
+                # Format boolean values
+                if value is True:
+                    value = "Yes"
+                elif value is False:
+                    value = "No"
+                elif value is None:
+                    value = ""
+
+                cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                cell.border = thin_border
+
+        # Auto-adjust column widths
+        for col_idx, (key, header, min_width, weight, data_key) in enumerate(self.columns, 1):
+            # Calculate max width based on content
+            max_length = len(header)
+            for row_idx in range(start_row + 1, start_row + 1 + len(self.filtered_artifacts)):
+                cell_value = ws.cell(row=row_idx, column=col_idx).value
+                if cell_value:
+                    max_length = max(max_length, len(str(cell_value)))
+            # Cap width at 50 characters
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[get_column_letter(col_idx)].width = adjusted_width
+
+        # Freeze header row
+        ws.freeze_panes = ws.cell(row=start_row + 1, column=1)
+
+        # Add summary sheet
+        summary_ws = wb.create_sheet(title="Summary")
+        summary_ws['A1'] = "Export Summary"
+        summary_ws['A1'].font = Font(bold=True, size=14)
+
+        summary_data = [
+            ("Export Date", datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")),
+            ("Source File", self.current_file.name if self.current_file else "N/A"),
+            ("Total Artifacts in File", len(self.all_artifacts)),
+            ("Filtered Artifacts Exported", len(self.filtered_artifacts)),
+            ("", ""),
+            ("Active Filters", ""),
+        ]
+
+        for row_idx, (label, value) in enumerate(summary_data, 3):
+            summary_ws.cell(row=row_idx, column=1, value=label).font = Font(bold=True)
+            summary_ws.cell(row=row_idx, column=2, value=value)
+
+        # Add filter details
+        filter_row = len(summary_data) + 3
+        if active_filters:
+            for i, f in enumerate(active_filters):
+                summary_ws.cell(row=filter_row + i, column=2, value=f)
+        else:
+            summary_ws.cell(row=filter_row, column=2, value="None (all artifacts shown)")
+
+        summary_ws.column_dimensions['A'].width = 25
+        summary_ws.column_dimensions['B'].width = 50
+
+        # Save workbook
+        wb.save(filepath)
+
     def _load_file(self, file_path: Path):
         """Load and parse JSON file."""
         try:
@@ -396,6 +562,7 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
             'simulation_type': set(),
             'software_type': set(),
             'labcar_type': set(),
+            'test_type': set(),
             'lco_version': set(),
             'vemox_version': set(),
             'build_type': set(),
@@ -425,6 +592,8 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
                 unique_values['software_type'].add(str(artifact['software_type']))
             if artifact.get('labcar_type'):
                 unique_values['labcar_type'].add(str(artifact['labcar_type']))
+            if artifact.get('test_type'):
+                unique_values['test_type'].add(str(artifact['test_type']))
             if artifact.get('lco_version'):
                 unique_values['lco_version'].add(str(artifact['lco_version']))
             if artifact.get('vemox_version'):
@@ -543,6 +712,10 @@ class ArtifactViewerFrame(wx.Frame):  # type: ignore[name-defined]
 
             if filters.get('software_type', 'All') != "All":
                 if str(artifact.get('software_type', '') or '') != filters['software_type']:
+                    continue
+
+            if filters.get('test_type', 'All') != "All":
+                if str(artifact.get('test_type', '') or '') != filters['test_type']:
                     continue
 
             if filters.get('lco_version', 'All') != "All":

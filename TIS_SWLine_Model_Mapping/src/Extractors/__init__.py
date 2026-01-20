@@ -246,6 +246,7 @@ class ArtifactExtractor:
             'simulation_type': self._extract_simulation_type(component_path),
             'software_type': self._extract_software_type(component_path),
             'labcar_type': self._extract_labcar_type(component_path),
+            'test_type': self._extract_test_type_from_path(component_path),
             'user': None,
             'lco_version': None,
             'vemox_version': None,
@@ -288,6 +289,9 @@ class ArtifactExtractor:
                 condensed['lco_version'] = self._extract_lco_version(value)
             elif name == 'sources' and value:
                 condensed['vemox_version'] = self._extract_vemox_version(value, version_parser)
+            elif name == 'testType':
+                # Prefer attribute value over path-based extraction
+                condensed['test_type'] = value
 
         return {
             'name': component_data.get('name', 'Unknown'),
@@ -298,6 +302,7 @@ class ArtifactExtractor:
             'simulation_type': condensed['simulation_type'],
             'software_type': condensed['software_type'],
             'labcar_type': condensed['labcar_type'],
+            'test_type': condensed['test_type'],
             'user': condensed['user'],
             'lco_version': condensed['lco_version'],
             'vemox_version': condensed['vemox_version'],
@@ -337,6 +342,17 @@ class ArtifactExtractor:
             return 'HiL'
         if 'SiL' in path_parts:
             return 'SiL'
+        return None
+
+    def _extract_test_type_from_path(self, path: str) -> Optional[str]:
+        """Extract test type from path (directory under Test/{TestType})."""
+        if not path:
+            return None
+        path_parts = path.split('/')
+        # Look for 'Test' directory and return the next part
+        for i, part in enumerate(path_parts):
+            if part == 'Test' and i + 1 < len(path_parts):
+                return path_parts[i + 1]
         return None
 
     def _extract_lco_version(self, execution_value: Any) -> Optional[str]:
