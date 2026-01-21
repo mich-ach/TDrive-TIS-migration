@@ -19,8 +19,7 @@ output/
 *.txt
 *.html
 *.log
-*.pbr
-*.pbr_defaults
+
 
 # Python cache
 __pycache__/
@@ -29,4 +28,6 @@ __pycache__/
 *.pyd
 
 *vw-mdl-med*/
+*vw-mdl*/
 
+*.zip
