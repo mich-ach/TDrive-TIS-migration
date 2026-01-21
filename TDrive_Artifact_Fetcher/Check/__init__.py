@@ -13,11 +13,13 @@ Functions:
     dedupe_by_artifact_and_pick_latest: Removes duplicate entries keeping the latest.
 """
 
-import json
 import csv
-import openpyxl
+import json
+import logging
 import os
 import re
+
+import openpyxl
 
 # Load configuration
 _config_path = os.path.join(os.path.dirname(__file__), '..', 'config.json')
@@ -33,6 +35,22 @@ INPUT_DIR = os.path.join(_project_root, _input_dir_from_config) if not os.path.i
 _output_dir_from_config = CONFIG.get("output_dir", "output")
 OUTPUT_DIR = os.path.join(_project_root, _output_dir_from_config) if not os.path.isabs(_output_dir_from_config) else _output_dir_from_config
 
+LOG_LEVEL = CONFIG.get("log_level", "INFO")
+
+# Setup logger for this module
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# Console handler with level from config
+_console_handler = logging.StreamHandler()
+_console_level = getattr(logging, LOG_LEVEL, logging.INFO)
+_console_handler.setLevel(_console_level)
+_console_handler.setFormatter(logging.Formatter(
+    '%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%H:%M:%S'
+))
+logger.addHandler(_console_handler)
+
 
 def normalize_artifact_name(name: str) -> str:
     """
@@ -42,6 +60,7 @@ def normalize_artifact_name(name: str) -> str:
     if not isinstance(name, str):
         return ""
     return name.split(';', 1)[0].strip()
+
 
 def numeric_key_from_path(path: str) -> int:
     """
@@ -58,6 +77,7 @@ def numeric_key_from_path(path: str) -> int:
     if not digits:
         return 0
     return int("".join(digits))
+
 
 def dedupe_by_artifact_and_pick_latest(items: list) -> list:
     """
@@ -78,8 +98,6 @@ def dedupe_by_artifact_and_pick_latest(items: list) -> list:
 
         # Skip entries that don't have enough info to form the key
         if not tis_path or not tis_name:
-            # treat as its own unique group using empty components to avoid accidental collisions
-            # you can also choose to always keep such entries
             key = (tis_path, tis_name)
         else:
             key = (tis_path, tis_name)
@@ -123,16 +141,27 @@ class Check:
         """
         self.__av = []
         self.__miss = []
+
+        logger.info("[Step: Load Artifacts] Loading artifact data...")
         if type(available) is list:
             for e in available:
+                logger.debug(f"[Step: Load Artifacts] Loading from: {e}")
                 with open(e, 'r') as f:
-                    self.__av.extend(json.load(f))
+                    data = json.load(f)
+                    self.__av.extend(data)
+                    logger.debug(f"[Step: Load Artifacts] Loaded {len(data)} artifacts")
         else:
+            logger.debug(f"[Step: Load Artifacts] Loading from: {available}")
             with open(available, 'r') as f:
                 self.__av.extend(json.load(f))
+
+        logger.info(f"[Step: Load Artifacts] Total artifacts loaded: {len(self.__av)}")
+
+        logger.info(f"[Step: Load Missing] Loading missing PVER entries from: {missing}")
         with open(missing, 'r') as f:
             reader = csv.reader(f, delimiter=';')
             self.__miss = [{"PVER": row[0], "ECU": row[1], "Project": row[2]} for row in reader if row[4] == "No"]
+        logger.info(f"[Step: Load Missing] Loaded {len(self.__miss)} missing PVER entries")
 
     @staticmethod
     def __cut_string(input_string: str) -> str:
@@ -154,6 +183,9 @@ class Check:
 
         it checks if the PVER is in the paths of the A2L or HEXFile -> connects them and creates transfer entry for upload
         """
+        logger.info("[Step: Compare] Matching artifacts to missing PVER entries...")
+
+        matched_count = 0
         for e in self.__av:
             e["PVER"] = []
             if "A2LFile" in e["Model_Overview_data"]:
@@ -164,10 +196,14 @@ class Check:
                 for m in self.__miss:
                     if Check.__cut_string(m["PVER"]) in e["Model_Overview_data"]["HEXFile"]:
                         e["PVER"].append(m)
+            if e["PVER"]:
+                matched_count += 1
 
         data = [e for e in self.__av if len(e["PVER"]) != 0]
         self.__av = data
+        logger.info(f"[Step: Compare] Found {matched_count} artifacts with PVER matches")
 
+        transfer_count = 0
         for e in self.__av:
             LC_Type = ""
             if "pcie" in e["path"][e["path"].rfind("/"):]:
@@ -193,25 +229,31 @@ class Check:
             e["transfer"]["tis_artifact_path"] = f"xCU Projects/{ecu.replace('.', '')}/{e['PVER'][0]['PVER']}/Model/HiL/{e['swb']}/{LC_Type}"
             e["transfer"]["tis_migration"] = True
             e["transfer"]["lco_migration"] = False
+            transfer_count += 1
 
+        logger.info(f"[Step: Compare] Created {transfer_count} transfer entries")
+
+        before_dedupe = len(self.__av)
         self.__av = dedupe_by_artifact_and_pick_latest(self.__av)
-
+        logger.info(f"[Step: Compare] Deduplicated: {before_dedupe} -> {len(self.__av)} entries")
 
     def dump(self, output_dir: str = None) -> None:
         """dumps compare json to output directory
-        
+
         Args:
             output_dir (str): Directory to write check.json to (default: from config.json)
         """
         if output_dir is None:
             output_dir = OUTPUT_DIR
-            
+
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
-        
+
         output_path = os.path.join(output_dir, "check.json")
+        logger.info(f"[Step: Save] Saving comparison results to: {output_path}")
         with open(output_path, 'w') as f:
             f.write(json.dumps(self.__av, indent=4))
+        logger.debug(f"[Step: Save] Saved {len(self.__av)} entries to check.json")
 
     @staticmethod
     def create_mig(file: str, output_dir: str = None) -> None:
@@ -223,17 +265,20 @@ class Check:
         """
         if output_dir is None:
             output_dir = OUTPUT_DIR
-            
+
         # Create output directory if it doesn't exist
         os.makedirs(output_dir, exist_ok=True)
-        
+
+        logger.info(f"[Step: Migration] Loading check data from: {file}")
         data_src = []
         with open(file, 'r') as f:
             data_src = json.load(f)
-        data = {"models":[]}
+
+        data = {"models": []}
         data["models"] = [e["transfer"] for e in data_src]
-        
+
         output_path = os.path.join(output_dir, "mig.json")
+        logger.info(f"[Step: Migration] Saving migration file ({len(data['models'])} models) to: {output_path}")
         with open(output_path, 'w') as f:
             f.write(json.dumps(data, indent=4))
 
@@ -245,13 +290,16 @@ class Check:
             file_in (str): xlsx file
             file_out (str): target csv file
         """
+        logger.info(f"[Step: Transform] Converting Excel to CSV: {file_in}")
+
         # Create directory for output file if it doesn't exist
         output_dir = os.path.dirname(file_out)
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
-        
+
         wb = openpyxl.load_workbook(file_in)
         sh = wb.active
+        row_count = 0
         with open(file_out, 'w', newline="", encoding='utf-8') as f:
             c = csv.writer(f, delimiter=";")
             for i, r in enumerate(sh.iter_rows(), start=1):
@@ -266,6 +314,10 @@ class Check:
                         val = ""  # write empty instead of None
                     cleaned_row.append(val)
                 c.writerow(cleaned_row)
+                row_count += 1
+
+        logger.info(f"[Step: Transform] Wrote {row_count} rows to: {file_out}")
+
 
 if __name__ == '__main__':
     # Check.transform_excel("missing.xlsx", "missing.csv")
