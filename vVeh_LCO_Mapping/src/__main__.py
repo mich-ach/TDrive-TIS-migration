@@ -20,6 +20,7 @@ import json
 import logging
 import os
 import platform
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -111,6 +112,11 @@ def run_mapping_workflow(json_file: Path, excel_file: Path) -> bool:
         logger.info(f"Input JSON: {json_file}")
         logger.info(f"Input Excel: {excel_file}")
         logger.info(f"Output directory: {run_dir}")
+
+        # Copy input JSON file to output directory
+        json_copy_path = run_dir / json_file.name
+        shutil.copy2(json_file, json_copy_path)
+        logger.info(f"Copied input JSON to: {json_copy_path}")
 
         # Load JSON data
         logger.info("")
