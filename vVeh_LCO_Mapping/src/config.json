@@ -10,6 +10,8 @@
     },
 
     "workflow": {
+        "default_excel_file": "Masterdata-XCU.xlsx",
+        "tis_extractor_path": "../../TIS_Artifact_Fetcher/src",
         "auto_open_report": false,
         "generate_validation_report": false
     },
