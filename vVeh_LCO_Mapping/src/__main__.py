@@ -30,12 +30,12 @@ from Handlers import DirectoryHandler, ExcelHandler
 import config
 from config import (
     EXCEL_OUTPUT_PREFIX,
-    DEFAULT_EXCEL_FILE,
     AUTO_OPEN_REPORT,
     GENERATE_VALIDATION_REPORT,
     TIS_LINK_TEMPLATE,
     NAMING_CONVENTION_ENABLED,
-    TIS_EXTRACTOR_ABS_PATH,
+    INPUT_DIR_PATH,
+    ARTIFACTS_JSON_PATTERN,
 )
 
 # Setup logging
@@ -98,12 +98,11 @@ def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[st
     """
     try:
         from Reports import generate_excel_report
-        # Try to import PathValidator from TIS extractor
-        sys.path.insert(0, str(TIS_EXTRACTOR_ABS_PATH / "src"))
         from Validators import PathValidator
         from Models import DeviationType, ValidationReport
     except ImportError as e:
         logger.warning(f"Could not import validation modules: {e}")
+        logger.warning("Validation report generation skipped")
         return None
 
     logger.info("Generating Validation Report (Path & Naming Deviations)")
@@ -325,21 +324,20 @@ def main():
         json_file = Path(sys.argv[1]).resolve()
         excel_file = Path(sys.argv[2]).resolve()
     elif len(sys.argv) == 2:
-        # Single argument: assume it's JSON file, use default Excel
+        # Single argument: assume it's JSON file, find Excel in input dir
         json_file = Path(sys.argv[1]).resolve()
-        excel_file = (config.SCRIPT_DIR / DEFAULT_EXCEL_FILE).resolve()
+        # Look for Excel file in input directory
+        excel_files = list(INPUT_DIR_PATH.glob("*.xlsx"))
+        if excel_files:
+            excel_file = max(excel_files, key=lambda x: x.stat().st_mtime)
     else:
-        # No arguments: try to find latest JSON, use default Excel
-        excel_file = (config.SCRIPT_DIR / DEFAULT_EXCEL_FILE).resolve()
+        # No arguments: try to find files in input directory
+        json_file = find_latest_vveh_json(INPUT_DIR_PATH)
 
-        # Look for JSON in TIS extractor output
-        tis_output = TIS_EXTRACTOR_ABS_PATH / "output"
-        if tis_output.exists():
-            json_file = find_latest_vveh_json(tis_output)
-
-        if not json_file:
-            # Also check local output
-            json_file = find_latest_vveh_json(config.OUTPUT_DIR)
+        # Look for Excel file in input directory
+        excel_files = list(INPUT_DIR_PATH.glob("*.xlsx"))
+        if excel_files:
+            excel_file = max(excel_files, key=lambda x: x.stat().st_mtime)
 
     # Validate inputs
     if not json_file:
@@ -350,12 +348,16 @@ def main():
         logger.info("  python -m vVeh_LCO_Mapping <json_file>")
         logger.info("  python -m vVeh_LCO_Mapping")
         logger.info("")
-        logger.info("First run the TIS extractor to generate artifact JSON:")
-        logger.info("  python -m TIS_SWLine_Model_Mapping")
+        logger.info(f"Place input files in: {INPUT_DIR_PATH}")
+        logger.info(f"  - JSON artifact file (e.g., {ARTIFACTS_JSON_PATTERN})")
+        logger.info("  - Excel master file (*.xlsx)")
         sys.exit(1)
 
     if not json_file.exists():
         exit_with_error(f"JSON file not found: {json_file}")
+
+    if not excel_file:
+        exit_with_error(f"No Excel file found! Place an Excel file in {INPUT_DIR_PATH}")
 
     if not excel_file.exists():
         exit_with_error(f"Excel file not found: {excel_file}")
