@@ -32,10 +32,8 @@ _config = _load_config()
 # WORKFLOW SETTINGS
 # =============================================================================
 
-DEFAULT_EXCEL_FILE = _config["workflow"]["default_excel_file"]
-AUTO_OPEN_REPORT = _config["workflow"]["auto_open_report"]
-GENERATE_VALIDATION_REPORT = _config["workflow"]["generate_validation_report"]
-TIS_EXTRACTOR_PATH = _config["workflow"]["tis_extractor_path"]
+AUTO_OPEN_REPORT = _config["workflow"].get("auto_open_report", False)
+GENERATE_VALIDATION_REPORT = _config["workflow"].get("generate_validation_report", False)
 
 # =============================================================================
 # OUTPUT SETTINGS
@@ -70,18 +68,25 @@ NAMING_CONVENTION_ENABLED = _config.get("naming_convention", {}).get("enabled", 
 NAMING_CONVENTION_PATTERNS = _config.get("naming_convention", {}).get("patterns", {})
 
 # =============================================================================
+# PATH SETTINGS
+# =============================================================================
+
+INPUT_DIR = _config.get("paths", {}).get("input_dir", "../input")
+OUTPUT_DIR_CONFIG = _config.get("paths", {}).get("output_dir", "../output")
+ARTIFACTS_JSON_PATTERN = _config.get("paths", {}).get("artifacts_json", "vVeh_LCO_artifacts_*.json")
+
+# =============================================================================
 # COMPUTED VALUES
 # =============================================================================
 
 PROJECT_ROOT = SCRIPT_DIR.parent
-OUTPUT_DIR = PROJECT_ROOT / "output"
+INPUT_DIR_PATH = (SCRIPT_DIR / INPUT_DIR).resolve()
+OUTPUT_DIR = (SCRIPT_DIR / OUTPUT_DIR_CONFIG).resolve()
 CURRENT_RUN_DIR: Optional[Path] = None
 
-# TIS Extractor path (relative to this script or absolute)
-TIS_EXTRACTOR_ABS_PATH = (SCRIPT_DIR / TIS_EXTRACTOR_PATH).resolve()
-
-# Ensure output directory exists
-OUTPUT_DIR.mkdir(exist_ok=True)
+# Ensure directories exist
+INPUT_DIR_PATH.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================
 # EXPLANATION TEXT FOR EXCEL REPORT
