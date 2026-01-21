@@ -358,7 +358,7 @@ class Artifact:
         """
         try:
             for e in os.listdir(path):
-                print(f"{e}")
+                logger.debug(f"[Step: Scan Network] Found: {e}")
                 if os.path.isdir(os.path.join(path, e)):
                     data[e] = {}
                     if max_lvl != 0:
