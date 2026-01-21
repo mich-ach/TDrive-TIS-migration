@@ -34,8 +34,8 @@ from config import (
     GENERATE_VALIDATION_REPORT,
     TIS_LINK_TEMPLATE,
     NAMING_CONVENTION_ENABLED,
-    INPUT_DIR_PATH,
-    ARTIFACTS_JSON_PATTERN,
+    EXCEL_FILE_PATH,
+    ARTIFACTS_JSON_PATH,
 )
 
 # Setup logging
@@ -316,7 +316,7 @@ def run_mapping_workflow(json_file: Path, excel_file: Path) -> bool:
 
 def main():
     """Main entry point."""
-    # Parse arguments
+    # Parse arguments - command line takes priority over config
     json_file = None
     excel_file = None
 
@@ -324,40 +324,38 @@ def main():
         json_file = Path(sys.argv[1]).resolve()
         excel_file = Path(sys.argv[2]).resolve()
     elif len(sys.argv) == 2:
-        # Single argument: assume it's JSON file, find Excel in input dir
+        # Single argument: assume it's JSON file, use Excel from config
         json_file = Path(sys.argv[1]).resolve()
-        # Look for Excel file in input directory
-        excel_files = list(INPUT_DIR_PATH.glob("*.xlsx"))
-        if excel_files:
-            excel_file = max(excel_files, key=lambda x: x.stat().st_mtime)
+        if EXCEL_FILE_PATH:
+            excel_file = Path(EXCEL_FILE_PATH).resolve()
     else:
-        # No arguments: try to find files in input directory
-        json_file = find_latest_vveh_json(INPUT_DIR_PATH)
-
-        # Look for Excel file in input directory
-        excel_files = list(INPUT_DIR_PATH.glob("*.xlsx"))
-        if excel_files:
-            excel_file = max(excel_files, key=lambda x: x.stat().st_mtime)
+        # No arguments: use paths from config
+        if ARTIFACTS_JSON_PATH:
+            json_file = Path(ARTIFACTS_JSON_PATH).resolve()
+        if EXCEL_FILE_PATH:
+            excel_file = Path(EXCEL_FILE_PATH).resolve()
 
     # Validate inputs
     if not json_file:
-        logger.error("No vVeh_LCO artifact JSON file found!")
+        logger.error("No vVeh_LCO artifact JSON file specified!")
         logger.info("")
         logger.info("Usage:")
         logger.info("  python -m vVeh_LCO_Mapping <json_file> <excel_file>")
         logger.info("  python -m vVeh_LCO_Mapping <json_file>")
         logger.info("  python -m vVeh_LCO_Mapping")
         logger.info("")
-        logger.info(f"Place input files in: {INPUT_DIR_PATH}")
-        logger.info(f"  - JSON artifact file (e.g., {ARTIFACTS_JSON_PATTERN})")
-        logger.info("  - Excel master file (*.xlsx)")
+        logger.info("Or set paths in config.json:")
+        logger.info('  "inputs": {')
+        logger.info('    "excel_file": "/path/to/masterdata.xlsx",')
+        logger.info('    "artifacts_json": "/path/to/vVeh_LCO_artifacts.json"')
+        logger.info('  }')
         sys.exit(1)
 
     if not json_file.exists():
         exit_with_error(f"JSON file not found: {json_file}")
 
     if not excel_file:
-        exit_with_error(f"No Excel file found! Place an Excel file in {INPUT_DIR_PATH}")
+        exit_with_error("No Excel file specified! Provide as argument or set in config.json")
 
     if not excel_file.exists():
         exit_with_error(f"Excel file not found: {excel_file}")

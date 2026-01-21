@@ -1,12 +1,10 @@
 {
     "_comment": "vVeh_LCO Software Line Mapping Configuration",
 
-    "paths": {
-        "_comment": "Input: place Excel master file and JSON from TIS_Artifact_Fetcher here. Output: generated reports.",
-        "input_dir": "../input",
-        "output_dir": "../output",
-        "excel_file": "Masterdata-XCU.xlsx",
-        "artifacts_json": "vveh_lco_artifacts_*.json"
+    "inputs": {
+        "_comment": "Input file paths - set these to your actual file locations",
+        "excel_file": null,
+        "artifacts_json": null
     },
 
     "workflow": {

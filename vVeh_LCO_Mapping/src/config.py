@@ -68,24 +68,21 @@ NAMING_CONVENTION_ENABLED = _config.get("naming_convention", {}).get("enabled", 
 NAMING_CONVENTION_PATTERNS = _config.get("naming_convention", {}).get("patterns", {})
 
 # =============================================================================
-# PATH SETTINGS
+# INPUT FILE PATHS
 # =============================================================================
 
-INPUT_DIR = _config.get("paths", {}).get("input_dir", "../input")
-OUTPUT_DIR_CONFIG = _config.get("paths", {}).get("output_dir", "../output")
-ARTIFACTS_JSON_PATTERN = _config.get("paths", {}).get("artifacts_json", "vVeh_LCO_artifacts_*.json")
+EXCEL_FILE_PATH = _config.get("inputs", {}).get("excel_file")
+ARTIFACTS_JSON_PATH = _config.get("inputs", {}).get("artifacts_json")
 
 # =============================================================================
 # COMPUTED VALUES
 # =============================================================================
 
 PROJECT_ROOT = SCRIPT_DIR.parent
-INPUT_DIR_PATH = (SCRIPT_DIR / INPUT_DIR).resolve()
-OUTPUT_DIR = (SCRIPT_DIR / OUTPUT_DIR_CONFIG).resolve()
+OUTPUT_DIR = PROJECT_ROOT / "output"
 CURRENT_RUN_DIR: Optional[Path] = None
 
-# Ensure directories exist
-INPUT_DIR_PATH.mkdir(parents=True, exist_ok=True)
+# Ensure output directory exists
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================
