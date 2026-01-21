@@ -33,7 +33,6 @@ _config = _load_config()
 # =============================================================================
 
 AUTO_OPEN_REPORT = _config["workflow"].get("auto_open_report", False)
-GENERATE_VALIDATION_REPORT = _config["workflow"].get("generate_validation_report", False)
 
 # =============================================================================
 # OUTPUT SETTINGS
@@ -48,10 +47,10 @@ EXCEL_OUTPUT_PREFIX = _config["output"]["excel_prefix"]
 DATE_DISPLAY_FORMAT = _config.get("display", {}).get("date_format", "%d-%m-%Y %H:%M:%S")
 
 # =============================================================================
-# API SETTINGS
+# TIS LINK TEMPLATE
 # =============================================================================
 
-TIS_LINK_TEMPLATE = _config["api"]["tis_link_template"]
+TIS_LINK_TEMPLATE = _config.get("tis_link_template", "https://rb-ps-tis-dashboard.bosch.com/?gotoCompInstanceId={}")
 
 # =============================================================================
 # EXCEL SETTINGS
@@ -59,13 +58,6 @@ TIS_LINK_TEMPLATE = _config["api"]["tis_link_template"]
 
 EXCEL_MASTER_COLUMNS = _config["excel"]["master_columns"]
 COLORS = _config["excel"]["colors"]
-
-# =============================================================================
-# NAMING CONVENTION
-# =============================================================================
-
-NAMING_CONVENTION_ENABLED = _config.get("naming_convention", {}).get("enabled", False)
-NAMING_CONVENTION_PATTERNS = _config.get("naming_convention", {}).get("patterns", {})
 
 # =============================================================================
 # INPUT FILE PATHS

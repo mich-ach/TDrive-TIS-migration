@@ -31,9 +31,6 @@ import config
 from config import (
     EXCEL_OUTPUT_PREFIX,
     AUTO_OPEN_REPORT,
-    GENERATE_VALIDATION_REPORT,
-    TIS_LINK_TEMPLATE,
-    NAMING_CONVENTION_ENABLED,
     EXCEL_FILE_PATH,
     ARTIFACTS_JSON_PATH,
 )
@@ -90,103 +87,6 @@ def find_latest_vveh_json(search_dir: Path) -> Optional[Path]:
 
     # Return the most recent file
     return max(all_files, key=lambda x: x.stat().st_mtime)
-
-
-def generate_validation_report(json_data: dict, output_dir: Path) -> Optional[str]:
-    """
-    Generate a validation report showing path and naming convention deviations.
-    """
-    try:
-        from Reports import generate_excel_report
-        from Validators import PathValidator
-        from Models import DeviationType, ValidationReport
-    except ImportError as e:
-        logger.warning(f"Could not import validation modules: {e}")
-        logger.warning("Validation report generation skipped")
-        return None
-
-    logger.info("Generating Validation Report (Path & Naming Deviations)")
-
-    path_validator = PathValidator()
-
-    report = ValidationReport(
-        timestamp=datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    )
-
-    for project_name, project_data in json_data.items():
-        report.total_projects += 1
-        report.processed_projects += 1
-
-        for sw_line_name, sw_line_data in project_data.get('software_lines', {}).items():
-            latest = sw_line_data.get('latest_artifact')
-            if not latest:
-                continue
-
-            report.total_artifacts_found += 1
-
-            artifact_name = latest.get('name', '')
-            path = latest.get('upload_path', '')
-            component_type = latest.get('component_type', '')
-
-            name_valid, matched_pattern, matched_groups, name_error = path_validator.validate_naming_convention(artifact_name)
-            path_deviation, path_details, path_hint = path_validator.validate_path(path, artifact_name, component_type)
-
-            deviation_type = DeviationType.VALID
-            details = ""
-            hint = ""
-
-            if not name_valid and NAMING_CONVENTION_ENABLED:
-                deviation_type = DeviationType.INVALID_NAME_FORMAT
-                details = f"Name format invalid: {name_error}"
-                hint = "See naming convention patterns in config"
-            elif path_deviation != DeviationType.VALID:
-                deviation_type = path_deviation
-                details = path_details
-                hint = path_hint
-
-            artifact_dict = {
-                'component_id': latest.get('artifact_rid', ''),
-                'component_name': artifact_name,
-                'path': path,
-                'user': latest.get('user', 'UNKNOWN'),
-                'tis_link': TIS_LINK_TEMPLATE.format(latest.get('artifact_rid', '')),
-                'deviation_type': deviation_type.value,
-                'deviation_details': details,
-                'expected_path_hint': hint,
-                'name_pattern_matched': matched_pattern,
-                'name_pattern_groups': matched_groups,
-            }
-
-            if deviation_type == DeviationType.VALID:
-                report.valid_artifacts += 1
-                report.valid_paths.append(artifact_dict)
-            else:
-                report.deviations_found += 1
-                report.deviations.append(artifact_dict)
-
-                if deviation_type.value not in report.deviations_by_type:
-                    report.deviations_by_type[deviation_type.value] = []
-                report.deviations_by_type[deviation_type.value].append(artifact_dict)
-
-                user = artifact_dict['user']
-                if user not in report.deviations_by_user:
-                    report.deviations_by_user[user] = []
-                report.deviations_by_user[user].append(artifact_dict)
-
-                if project_name not in report.deviations_by_project:
-                    report.deviations_by_project[project_name] = []
-                report.deviations_by_project[project_name].append(artifact_dict)
-
-    if report.total_artifacts_found > 0:
-        output_file = generate_excel_report(report, output_dir)
-        logger.info("Validation Report Summary:")
-        logger.info(f"  Total Artifacts: {report.total_artifacts_found}")
-        logger.info(f"  Valid: {report.valid_artifacts}")
-        logger.info(f"  Deviations: {report.deviations_found}")
-        return output_file
-    else:
-        logger.info("No artifacts found to validate")
-        return None
 
 
 def run_mapping_workflow(json_file: Path, excel_file: Path) -> bool:
@@ -284,20 +184,9 @@ def run_mapping_workflow(json_file: Path, excel_file: Path) -> bool:
 
         logger.info(f"  Report generated: {output_file}")
 
-        # Optional: Generate validation report
-        validation_report_file = None
-        if GENERATE_VALIDATION_REPORT:
-            logger.info("")
-            logger.info("Step 3: Generating validation report")
-            validation_report_file = generate_validation_report(json_latest, run_dir)
-            if validation_report_file:
-                logger.info(f"  Validation report: {validation_report_file}")
-
-        # Open reports
+        # Open report
         if AUTO_OPEN_REPORT:
             open_excel_file(output_file)
-            if validation_report_file:
-                open_excel_file(Path(validation_report_file))
 
         logger.info("")
         logger.info("=" * 60)
