@@ -1,0 +1,169 @@
+"""Directory handling for the vVeh_LCO_Mapping workflow.
+
+This module provides the DirectoryHandler class for managing output directories.
+"""
+
+import datetime
+import logging
+import shutil
+from pathlib import Path
+from typing import Optional, Tuple
+
+import config
+
+logger = logging.getLogger(__name__)
+
+
+class DirectoryHandler:
+    """Handles directory operations for the TIS artifact extraction workflow."""
+
+    @staticmethod
+    def initialize_directories(excel_path: Path) -> Tuple[Path, Path, Path]:
+        """
+        Initialize output directories and copy Excel file.
+
+        Args:
+            excel_path: Path to the input Excel file
+
+        Returns:
+            Tuple of (base_output_dir, run_dir, excel_copy_path)
+
+        Raises:
+            ValueError: If Excel file not found or directory creation fails
+        """
+        try:
+            # Validate input Excel file
+            if not excel_path.exists():
+                raise ValueError(f"Excel file not found: {excel_path}")
+
+            # Ensure output directory exists
+            config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Create timestamped run directory
+            timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+            run_dir = config.OUTPUT_DIR / f"run_{timestamp}"
+            run_dir.mkdir(parents=True, exist_ok=True)
+
+            # Copy Excel file to run directory
+            excel_copy_path = run_dir / excel_path.name
+            shutil.copy2(excel_path, excel_copy_path)
+
+            # Update global config
+            config.CURRENT_RUN_DIR = run_dir
+
+            logger.debug(f"Set config.CURRENT_RUN_DIR to: {config.CURRENT_RUN_DIR}")
+
+            return config.OUTPUT_DIR, run_dir, excel_copy_path
+
+        except Exception as e:
+            config.CURRENT_RUN_DIR = None
+            raise ValueError(f"Failed to initialize directories: {str(e)}")
+
+    @staticmethod
+    def get_output_file_path(prefix: str, extension: str) -> Path:
+        """
+        Generate timestamped output file path.
+
+        Args:
+            prefix: Prefix for the output file
+            extension: File extension (without dot)
+
+        Returns:
+            Path object for the output file
+
+        Raises:
+            ValueError: If run directory is not initialized
+        """
+        if not config.CURRENT_RUN_DIR or not config.CURRENT_RUN_DIR.exists():
+            raise ValueError(
+                f"Run directory not initialized or doesn't exist! "
+                f"Current value: {config.CURRENT_RUN_DIR}"
+            )
+
+        timestamp = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+        output_path = config.CURRENT_RUN_DIR / f"{prefix}_{timestamp}.{extension}"
+
+        logger.debug(f"Generated output path: {output_path}")
+
+        return output_path
+
+    @staticmethod
+    def validate_project_structure() -> bool:
+        """
+        Validate that all required directories exist or can be created.
+
+        Returns:
+            bool: True if structure is valid, False otherwise
+        """
+        try:
+            # Check if source directory exists
+            if not config.SCRIPT_DIR.exists():
+                logger.error(f"Source directory not found at {config.SCRIPT_DIR}")
+                return False
+
+            # Create output directory if it doesn't exist
+            config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+            # Verify write permissions
+            test_file = config.OUTPUT_DIR / ".test_write"
+            try:
+                test_file.touch()
+                test_file.unlink()
+            except Exception as e:
+                logger.error(f"No write permission in output directory: {e}")
+                return False
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error validating project structure: {e}")
+            return False
+
+    @staticmethod
+    def cleanup_old_runs(max_runs: int = 999) -> None:
+        """
+        Clean up old run directories, keeping only the most recent ones.
+
+        Args:
+            max_runs: Maximum number of run directories to keep
+        """
+        try:
+            if not config.OUTPUT_DIR.exists():
+                return
+
+            # Get all run directories sorted by creation time
+            run_dirs = sorted(
+                [d for d in config.OUTPUT_DIR.glob("run_*") if d.is_dir()],
+                key=lambda x: x.stat().st_mtime,
+                reverse=True
+            )
+
+            # Remove excess directories
+            for old_dir in run_dirs[max_runs:]:
+                try:
+                    shutil.rmtree(old_dir)
+                    logger.info(f"Cleaned up old run directory: {old_dir}")
+                except Exception as e:
+                    logger.warning(f"Failed to remove old directory {old_dir}: {e}")
+
+        except Exception as e:
+            logger.warning(f"Failed to clean up old runs: {e}")
+
+    @staticmethod
+    def reset_run_directory() -> None:
+        """Reset the current run directory in case of errors."""
+        config.CURRENT_RUN_DIR = None
+
+    @staticmethod
+    def get_current_run_dir() -> Optional[Path]:
+        """Get the current run directory safely."""
+        return config.CURRENT_RUN_DIR
+
+    @staticmethod
+    def ensure_run_directory_set() -> bool:
+        """Ensure run directory is properly set and exists."""
+        return (
+            config.CURRENT_RUN_DIR is not None
+            and isinstance(config.CURRENT_RUN_DIR, Path)
+            and config.CURRENT_RUN_DIR.exists()
+        )
