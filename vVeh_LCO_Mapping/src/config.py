@@ -33,7 +33,6 @@ _config = _load_config()
 # =============================================================================
 
 AUTO_OPEN_REPORT = _config["workflow"].get("auto_open_report", False)
-GENERATE_VALIDATION_REPORT = _config["workflow"].get("generate_validation_report", False)
 
 # =============================================================================
 # OUTPUT SETTINGS
@@ -48,10 +47,10 @@ EXCEL_OUTPUT_PREFIX = _config["output"]["excel_prefix"]
 DATE_DISPLAY_FORMAT = _config.get("display", {}).get("date_format", "%d-%m-%Y %H:%M:%S")
 
 # =============================================================================
-# API SETTINGS
+# TIS LINK TEMPLATE
 # =============================================================================
 
-TIS_LINK_TEMPLATE = _config["api"]["tis_link_template"]
+TIS_LINK_TEMPLATE = _config.get("tis_link_template", "https://rb-ps-tis-dashboard.bosch.com/?gotoCompInstanceId={}")
 
 # =============================================================================
 # EXCEL SETTINGS
@@ -61,31 +60,21 @@ EXCEL_MASTER_COLUMNS = _config["excel"]["master_columns"]
 COLORS = _config["excel"]["colors"]
 
 # =============================================================================
-# NAMING CONVENTION
+# INPUT FILE PATHS
 # =============================================================================
 
-NAMING_CONVENTION_ENABLED = _config.get("naming_convention", {}).get("enabled", False)
-NAMING_CONVENTION_PATTERNS = _config.get("naming_convention", {}).get("patterns", {})
-
-# =============================================================================
-# PATH SETTINGS
-# =============================================================================
-
-INPUT_DIR = _config.get("paths", {}).get("input_dir", "../input")
-OUTPUT_DIR_CONFIG = _config.get("paths", {}).get("output_dir", "../output")
-ARTIFACTS_JSON_PATTERN = _config.get("paths", {}).get("artifacts_json", "vVeh_LCO_artifacts_*.json")
+EXCEL_FILE_PATH = _config.get("inputs", {}).get("excel_file")
+ARTIFACTS_JSON_PATH = _config.get("inputs", {}).get("artifacts_json")
 
 # =============================================================================
 # COMPUTED VALUES
 # =============================================================================
 
 PROJECT_ROOT = SCRIPT_DIR.parent
-INPUT_DIR_PATH = (SCRIPT_DIR / INPUT_DIR).resolve()
-OUTPUT_DIR = (SCRIPT_DIR / OUTPUT_DIR_CONFIG).resolve()
+OUTPUT_DIR = PROJECT_ROOT / "output"
 CURRENT_RUN_DIR: Optional[Path] = None
 
-# Ensure directories exist
-INPUT_DIR_PATH.mkdir(parents=True, exist_ok=True)
+# Ensure output directory exists
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================

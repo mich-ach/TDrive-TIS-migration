@@ -1,17 +1,14 @@
 {
     "_comment": "vVeh_LCO Software Line Mapping Configuration",
 
-    "paths": {
-        "_comment": "Input: place Excel master file and JSON from TIS_Artifact_Fetcher here. Output: generated reports.",
-        "input_dir": "../input",
-        "output_dir": "../output",
-        "excel_file": "Masterdata-XCU.xlsx",
-        "artifacts_json": "vveh_lco_artifacts_*.json"
+    "inputs": {
+        "_comment": "Input file paths - set these to your actual file locations",
+        "excel_file": null,
+        "artifacts_json": null
     },
 
     "workflow": {
-        "auto_open_report": false,
-        "generate_validation_report": false
+        "auto_open_report": false
     },
 
     "output": {
@@ -22,9 +19,7 @@
         "date_format": "%d-%m-%Y %H:%M:%S"
     },
 
-    "api": {
-        "tis_link_template": "https://rb-ps-tis-dashboard.bosch.com/?gotoCompInstanceId={}"
-    },
+    "tis_link_template": "https://rb-ps-tis-dashboard.bosch.com/?gotoCompInstanceId={}",
 
     "excel": {
         "_comment": "Excel column definitions and styling",
@@ -39,18 +34,6 @@
             "found_green": "E8F5E8",
             "not_found_red": "FFE6E6",
             "not_in_tis_grey": "D9D9D9"
-        }
-    },
-
-    "naming_convention": {
-        "_comment": "vVeh_LCO specific naming patterns",
-        "enabled": true,
-        "patterns": {
-            "vveh_lco_standard": {
-                "description": "Standard vVeh_LCO artifact naming pattern",
-                "pattern": "^(?:(?P<timestamp>[\\dT:\\-Z]+)\\s*-\\s*)?VW\\s+vVeh_LCO\\s*:\\s*(?P<sw_version>[\\w]+)\\s*/\\s*(?P<model_version>[\\w]+)\\s*\\[(?P<variants>[^\\]]*)\\]\\s*(?P<suffix>.*)$",
-                "example": "VW vVeh_LCO : DMG1211V07C1935 / M22J71 [] 110kW_OPF_DQ_CANv7"
-            }
         }
     }
 }
