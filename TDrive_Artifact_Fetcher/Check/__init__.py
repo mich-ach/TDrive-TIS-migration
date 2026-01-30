@@ -184,20 +184,62 @@ class Check:
         it checks if the PVER is in the paths of the A2L or HEXFile -> connects them and creates transfer entry for upload
         """
         logger.info("[Step: Compare] Matching artifacts to missing PVER entries...")
+        logger.info(f"[Step: Compare] Artifacts to check: {len(self.__av)}, Missing PVER entries: {len(self.__miss)}")
 
         matched_count = 0
+        debug_examples_logged = 0
+        max_debug_examples = 2
+
         for e in self.__av:
             e["PVER"] = []
+            is_debug_example = debug_examples_logged < max_debug_examples
+
+            if is_debug_example:
+                debug_examples_logged += 1
+                logger.debug(f"[Step: Compare] === Example {debug_examples_logged} ===")
+                logger.debug(f"[Step: Compare]   Artifact path: {e.get('path', 'N/A')}")
+                logger.debug(f"[Step: Compare]   Model name: {e.get('Model_Overview_data', {}).get('name', 'N/A')}")
+                a2l = e.get("Model_Overview_data", {}).get("A2LFile", None)
+                hex_f = e.get("Model_Overview_data", {}).get("HEXFile", None)
+                logger.debug(f"[Step: Compare]   A2LFile: {a2l}")
+                logger.debug(f"[Step: Compare]   HEXFile: {hex_f}")
+
             if "A2LFile" in e["Model_Overview_data"]:
+                a2l_value = e["Model_Overview_data"]["A2LFile"]
                 for m in self.__miss:
-                    if Check.__cut_string(m["PVER"]) in e["Model_Overview_data"]["A2LFile"]:
+                    cut_pver = Check.__cut_string(m["PVER"])
+                    match = cut_pver in a2l_value
+                    if is_debug_example:
+                        logger.debug(
+                            f"[Step: Compare]   A2L check: "
+                            f"cut_string('{m['PVER']}') = '{cut_pver}' "
+                            f"in A2LFile -> {'MATCH' if match else 'no match'}"
+                        )
+                    if match:
                         e["PVER"].append(m)
+
             if "HEXFile" in e["Model_Overview_data"]:
+                hex_value = e["Model_Overview_data"]["HEXFile"]
                 for m in self.__miss:
-                    if Check.__cut_string(m["PVER"]) in e["Model_Overview_data"]["HEXFile"]:
+                    cut_pver = Check.__cut_string(m["PVER"])
+                    match = cut_pver in hex_value
+                    if is_debug_example:
+                        logger.debug(
+                            f"[Step: Compare]   HEX check: "
+                            f"cut_string('{m['PVER']}') = '{cut_pver}' "
+                            f"in HEXFile -> {'MATCH' if match else 'no match'}"
+                        )
+                    if match:
                         e["PVER"].append(m)
+
             if e["PVER"]:
                 matched_count += 1
+                if is_debug_example:
+                    logger.debug(f"[Step: Compare]   Result: MATCHED with {len(e['PVER'])} PVER entries")
+                    for pver in e["PVER"]:
+                        logger.debug(f"[Step: Compare]     -> PVER={pver['PVER']}, ECU={pver['ECU']}, Project={pver['Project']}")
+            elif is_debug_example:
+                logger.debug(f"[Step: Compare]   Result: NO MATCH")
 
         data = [e for e in self.__av if len(e["PVER"]) != 0]
         self.__av = data
@@ -205,12 +247,14 @@ class Check:
 
         transfer_count = 0
         for e in self.__av:
+            path_tail = e["path"][e["path"].rfind("/"):]
             LC_Type = ""
-            if "pcie" in e["path"][e["path"].rfind("/"):]:
+            if "pcie" in path_tail:
                 LC_Type = "PCIE"
-            elif "vme" in e["path"][e["path"].rfind("/"):]:
+            elif "vme" in path_tail:
                 LC_Type = "VME"
             else:
+                logger.debug(f"[Step: Transfer] Skipped (no pcie/vme in tail '{path_tail}'): {e['path']}")
                 continue
 
             ecu = e["PVER"][0]["ECU"]
@@ -230,6 +274,13 @@ class Check:
             e["transfer"]["tis_migration"] = True
             e["transfer"]["lco_migration"] = False
             transfer_count += 1
+
+            if transfer_count <= max_debug_examples:
+                logger.debug(f"[Step: Transfer] === Transfer Example {transfer_count} ===")
+                logger.debug(f"[Step: Transfer]   ECU raw='{e['PVER'][0]['ECU']}' -> cleaned='{ecu}'")
+                logger.debug(f"[Step: Transfer]   LC_Type='{LC_Type}' (from path tail: '{path_tail}')")
+                logger.debug(f"[Step: Transfer]   tis_artifact_name='{e['transfer']['tis_artifact_name']}'")
+                logger.debug(f"[Step: Transfer]   tis_artifact_path='{e['transfer']['tis_artifact_path']}'")
 
         logger.info(f"[Step: Compare] Created {transfer_count} transfer entries")
 
