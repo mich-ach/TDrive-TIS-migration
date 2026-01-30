@@ -206,28 +206,30 @@ class Check:
 
             if "A2LFile" in e["Model_Overview_data"]:
                 a2l_value = e["Model_Overview_data"]["A2LFile"]
+                if is_debug_example:
+                    logger.debug(f"[Step: Compare]   Checking against A2LFile: '{a2l_value}'")
                 for m in self.__miss:
                     cut_pver = Check.__cut_string(m["PVER"])
                     match = cut_pver in a2l_value
                     if is_debug_example:
                         logger.debug(
-                            f"[Step: Compare]   A2L check: "
-                            f"cut_string('{m['PVER']}') = '{cut_pver}' "
-                            f"in A2LFile -> {'MATCH' if match else 'no match'}"
+                            f"[Step: Compare]     '{cut_pver}' (from '{m['PVER']}') "
+                            f"in '{a2l_value}' -> {'MATCH' if match else 'no match'}"
                         )
                     if match:
                         e["PVER"].append(m)
 
             if "HEXFile" in e["Model_Overview_data"]:
                 hex_value = e["Model_Overview_data"]["HEXFile"]
+                if is_debug_example:
+                    logger.debug(f"[Step: Compare]   Checking against HEXFile: '{hex_value}'")
                 for m in self.__miss:
                     cut_pver = Check.__cut_string(m["PVER"])
                     match = cut_pver in hex_value
                     if is_debug_example:
                         logger.debug(
-                            f"[Step: Compare]   HEX check: "
-                            f"cut_string('{m['PVER']}') = '{cut_pver}' "
-                            f"in HEXFile -> {'MATCH' if match else 'no match'}"
+                            f"[Step: Compare]     '{cut_pver}' (from '{m['PVER']}') "
+                            f"in '{hex_value}' -> {'MATCH' if match else 'no match'}"
                         )
                     if match:
                         e["PVER"].append(m)
