@@ -706,8 +706,8 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
         but only with artifacts of that component_type
     """
     by_component = {}
-    # Track software lines that have no artifacts at all
-    empty_sw_lines = []  # list of (project_name, project_rid, sw_line_name, sw_line_rid)
+    # Track ALL software lines for completeness pass later
+    all_sw_lines = []  # list of (project_name, project_rid, sw_line_name, sw_line_rid)
 
     total_sw_lines = 0
     for project_name, project_data in structured_data.items():
@@ -718,9 +718,8 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
             sw_line_rid = sw_line_data['software_line_rid']
             artifacts = sw_line_data.get('artifacts', [])
 
-            if not artifacts:
-                empty_sw_lines.append((project_name, project_rid, sw_line_name, sw_line_rid))
-                continue
+            # Track every SW line for the completeness pass
+            all_sw_lines.append((project_name, project_rid, sw_line_name, sw_line_rid))
 
             for artifact in artifacts:
                 comp_type = artifact.get('component_type', 'unknown')
@@ -743,15 +742,17 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
 
                 by_component[comp_type][project_name]['software_lines'][sw_line_name]['artifacts'].append(artifact)
 
-    # Add software lines without artifacts to every component type
+    # Ensure EVERY software line appears in EVERY component type.
+    # A SW line may have artifacts only for one type (e.g. test_ECU-TEST) but not
+    # another (e.g. vVeh_LCO). Without this, it would be missing from the vVeh_LCO
+    # output and incorrectly reported as "not found in TIS".
     logger.info(f"  separate_by_component_type: {total_sw_lines} total SW lines, "
-                f"{len(empty_sw_lines)} without artifacts, "
                 f"{len(by_component)} component types found")
 
-    if empty_sw_lines and by_component:
+    if all_sw_lines and by_component:
         for comp_type in by_component:
             added = 0
-            for project_name, project_rid, sw_line_name, sw_line_rid in empty_sw_lines:
+            for project_name, project_rid, sw_line_name, sw_line_rid in all_sw_lines:
                 if project_name not in by_component[comp_type]:
                     by_component[comp_type][project_name] = {
                         'project_rid': project_rid,
@@ -764,9 +765,9 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
                         'artifacts': []
                     }
                     added += 1
-            logger.info(f"  Added {added} empty SW lines to component type '{comp_type}'")
-    elif empty_sw_lines and not by_component:
-        logger.warning(f"  WARNING: {len(empty_sw_lines)} SW lines without artifacts but NO component types found!")
+            logger.info(f"  Added {added} SW lines (without {comp_type} artifacts) to '{comp_type}'")
+    elif all_sw_lines and not by_component:
+        logger.warning(f"  WARNING: {len(all_sw_lines)} SW lines but NO component types found!")
 
     # Log final counts per component type
     for comp_type, comp_data in by_component.items():
