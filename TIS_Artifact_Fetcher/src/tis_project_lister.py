@@ -9,11 +9,11 @@ Usage:
     python -m src.tis_project_lister
     python -m src.tis_project_lister --output my_projects.csv
 
-Output CSV format (double-semicolon delimited):
-    Project line;;ECU - HW Variante;;Project class
-    SoftwareLine1;;;;ProjectA
-    SoftwareLine2;;;;ProjectA
-    SoftwareLine3;;;;ProjectB
+Output CSV format (semicolon-delimited):
+    Project line;ECU - HW Variante;Project class
+    SoftwareLine1;;ProjectA
+    SoftwareLine2;;ProjectA
+    SoftwareLine3;;ProjectB
 """
 
 import argparse
@@ -107,12 +107,9 @@ def list_projects_and_software_lines(client: TISClient) -> list:
     return entries
 
 
-DELIMITER = ";;"
-
-
 def write_csv(entries: list, output_path: Path) -> None:
     """
-    Write project/software line entries to a double-semicolon delimited CSV.
+    Write project/software line entries to a semicolon-delimited CSV.
 
     Args:
         entries: List of dicts with CSV_HEADERS keys
@@ -121,10 +118,10 @@ def write_csv(entries: list, output_path: Path) -> None:
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(DELIMITER.join(CSV_HEADERS) + '\n')
+        f.write(';'.join(CSV_HEADERS) + '\n')
         for entry in entries:
             values = [entry.get(h, '') for h in CSV_HEADERS]
-            f.write(DELIMITER.join(values) + '\n')
+            f.write(';'.join(values) + '\n')
 
     logger.info(f"CSV written: {output_path} ({len(entries)} entries)")
 

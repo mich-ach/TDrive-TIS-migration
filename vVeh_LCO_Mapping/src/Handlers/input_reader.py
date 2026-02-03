@@ -3,8 +3,8 @@
 Supports both Excel (.xlsx) and CSV (.csv) input formats, returning
 a unified data structure for the mapping workflow.
 
-The CSV format is double-semicolon delimited with headers:
-    Project line;;ECU - HW Variante;;Project class
+The CSV format is semicolon-delimited with headers:
+    Project line;ECU - HW Variante;Project class
 
 This matches the output of TIS_Artifact_Fetcher/src/tis_project_lister.py.
 """
@@ -60,14 +60,14 @@ class InputReader:
         else:
             return {}, f"Unsupported file format: '{suffix}'. Expected .xlsx or .csv"
 
-    DELIMITER = ";;"
+    DELIMITER = ";"
 
     def _read_csv(self, file_path: str) -> Tuple[Dict[str, Any], Optional[str]]:
         """
-        Read software line data from a double-semicolon delimited CSV.
+        Read software line data from a semicolon-delimited CSV.
 
         Expected CSV format:
-            Project line;;ECU - HW Variante;;Project class
+            Project line;ECU - HW Variante;Project class
 
         Args:
             file_path: Path to CSV file
