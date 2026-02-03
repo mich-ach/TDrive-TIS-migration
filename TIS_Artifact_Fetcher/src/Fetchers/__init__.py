@@ -881,6 +881,82 @@ def save_latest_artifacts_by_component_type(structured_data: Dict[str, Any], out
     return output_files
 
 
+def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Ensure ALL software lines from TIS are present in structured_data.
+
+    Uses a separate TIS API query (same approach as tis_project_lister.py) to get
+    the complete list of projects and software lines, then adds any missing ones
+    to structured_data with empty artifacts. This guarantees that software lines
+    without a Model folder or any artifacts still appear in the output JSON.
+
+    Args:
+        structured_data: Output from ArtifactFetcher.extract()
+
+    Returns:
+        The same structured_data dict, updated in-place with any missing software lines
+    """
+    logger.info("Ensuring all software lines from TIS are included...")
+
+    client = TISClient(enable_cache=True)
+    root_data, _, _ = client.get_component(VW_XCU_PROJECT_ID, children_level=1)
+
+    if not root_data:
+        logger.warning("Could not fetch project tree for software line completeness check")
+        return structured_data
+
+    projects = root_data.get('children', [])
+    added_count = 0
+
+    for project in projects:
+        project_id = project.get('rId')
+        project_name = project.get('name', '')
+
+        if project_name in SKIP_PROJECTS:
+            continue
+        if INCLUDE_PROJECTS and project_name not in INCLUDE_PROJECTS:
+            continue
+
+        # Fetch software lines for this project
+        project_data, _, _ = client.get_component(project_id, children_level=1)
+        if not project_data:
+            continue
+
+        software_lines = project_data.get('children', [])
+
+        # Ensure project exists in structured_data
+        if project_name not in structured_data:
+            structured_data[project_name] = {
+                'project_rid': project_id,
+                'software_lines': {}
+            }
+
+        # Ensure every software line exists
+        for sw_line in software_lines:
+            sw_line_name = sw_line.get('name', '')
+            sw_line_id = sw_line.get('rId')
+
+            if not sw_line_name:
+                continue
+
+            if INCLUDE_SOFTWARE_LINES and sw_line_name not in INCLUDE_SOFTWARE_LINES:
+                continue
+
+            if sw_line_name not in structured_data[project_name]['software_lines']:
+                structured_data[project_name]['software_lines'][sw_line_name] = {
+                    'software_line_rid': sw_line_id,
+                    'artifacts': []
+                }
+                added_count += 1
+
+    if added_count > 0:
+        logger.info(f"  Added {added_count} software lines that had no artifacts")
+    else:
+        logger.info("  All software lines already present")
+
+    return structured_data
+
+
 def run_extraction() -> Tuple[bool, Optional[Dict[str, Any]]]:
     """
     Main function to run artifact extraction.
@@ -900,6 +976,10 @@ def run_extraction() -> Tuple[bool, Optional[Dict[str, Any]]]:
         if not structured_data:
             logger.error("No data extracted!")
             return False, None
+
+        # Ensure ALL software lines from TIS are in structured_data,
+        # even those without a Model folder or any artifacts
+        ensure_all_software_lines(structured_data)
 
         # Save artifacts separated by component type
         output_files = save_results_by_component_type(structured_data)
