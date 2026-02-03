@@ -897,14 +897,73 @@ def save_latest_artifacts_by_component_type(structured_data: Dict[str, Any], out
     return output_files
 
 
+def _collect_software_lines(node: Dict, collected: List, depth: int = 0, max_depth: int = 3) -> None:
+    """
+    Recursively collect software lines (leaf-level children) from a project tree.
+
+    Some projects have intermediate grouping folders between the project and the
+    actual software lines. This function traverses up to max_depth levels to find
+    all software lines, which are nodes whose children (if any) are NOT further
+    grouping folders but rather content folders like Model, Test, etc.
+
+    A node is considered a software line if:
+    - It has no children (leaf node), OR
+    - Its children don't themselves have children with further nesting
+
+    Args:
+        node: TIS API response node with 'children', 'name', 'rId'
+        collected: List to append found (name, rId) tuples to
+        depth: Current recursion depth
+        max_depth: Maximum depth to search
+    """
+    children = node.get('children', [])
+
+    if not children:
+        # Leaf node at project level - this shouldn't normally happen
+        return
+
+    for child in children:
+        child_name = child.get('name', '')
+        child_id = child.get('rId')
+        child_children = child.get('children', [])
+
+        if not child_name or not child_id:
+            continue
+
+        # If this child has no children, it's a leaf = software line
+        # If this child has children, check if they look like SW line content
+        # (Model, Test, etc.) or like further grouping folders
+        if not child_children:
+            # Leaf node = software line (no sub-content at this depth)
+            collected.append((child_name, child_id))
+        else:
+            # Check if children look like content folders (Model, Test, Documentation, etc.)
+            # or like further software line groupings
+            child_names = [c.get('name', '') for c in child_children]
+            content_folder_names = {'Model', 'Test', 'Documentation', 'Archive', 'Archiv',
+                                    'SiL', 'HiL', 'Backup', 'Old', 'Deprecated'}
+            has_content_folders = any(cn in content_folder_names for cn in child_names)
+
+            if has_content_folders:
+                # This child has content folders -> it IS a software line
+                collected.append((child_name, child_id))
+            elif depth < max_depth:
+                # This child has sub-children that don't look like content folders
+                # -> it's an intermediate grouping, recurse deeper
+                _collect_software_lines(child, collected, depth + 1, max_depth)
+            else:
+                # Max depth reached, treat as software line anyway
+                collected.append((child_name, child_id))
+
+
 def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]:
     """
     Ensure ALL software lines from TIS are present in structured_data.
 
-    Uses a separate TIS API query (same approach as tis_project_lister.py) to get
-    the complete list of projects and software lines, then adds any missing ones
-    to structured_data with empty artifacts. This guarantees that software lines
-    without a Model folder or any artifacts still appear in the output JSON.
+    Uses a separate TIS API query to get the complete list of projects and software
+    lines, then adds any missing ones to structured_data with empty artifacts.
+    Traverses deeper than children_level=1 to find software lines that may be nested
+    under intermediate grouping folders.
 
     Args:
         structured_data: Output from ArtifactFetcher.extract()
@@ -933,12 +992,14 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
         if INCLUDE_PROJECTS and project_name not in INCLUDE_PROJECTS:
             continue
 
-        # Fetch software lines for this project
-        project_data, _, _ = client.get_component(project_id, children_level=1)
+        # Fetch project with depth=2 to see both direct children and grandchildren
+        project_data, _, _ = client.get_component(project_id, children_level=2)
         if not project_data:
             continue
 
-        software_lines = project_data.get('children', [])
+        # Collect all software lines, including those nested under grouping folders
+        collected_sw_lines: List[tuple] = []
+        _collect_software_lines(project_data, collected_sw_lines)
 
         # Ensure project exists in structured_data
         if project_name not in structured_data:
@@ -948,13 +1009,7 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
             }
 
         # Ensure every software line exists
-        for sw_line in software_lines:
-            sw_line_name = sw_line.get('name', '')
-            sw_line_id = sw_line.get('rId')
-
-            if not sw_line_name:
-                continue
-
+        for sw_line_name, sw_line_id in collected_sw_lines:
             if INCLUDE_SOFTWARE_LINES and sw_line_name not in INCLUDE_SOFTWARE_LINES:
                 continue
 
@@ -964,6 +1019,8 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
                     'artifacts': []
                 }
                 added_count += 1
+                if added_count <= 10:
+                    logger.info(f"    Added missing SW line: {project_name}/{sw_line_name}")
 
     # Log totals
     total_sw = sum(len(p['software_lines']) for p in structured_data.values())
