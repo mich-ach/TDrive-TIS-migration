@@ -95,6 +95,8 @@ class MappingHandler:
                         'project_data': project_data
                     }
 
+        logger.info(f"  JSON lookup: {len(json_lookup)} cleaned SW line keys")
+        logger.debug(f"  JSON lookup keys: {sorted(json_lookup.keys())}")
         return json_lookup
 
     def _create_mapping_entry(
@@ -162,6 +164,17 @@ class MappingHandler:
         logger.info(f"  Total software lines: {len(software_lines)}")
         logger.info(f"  Found matches: {matches}")
         logger.info(f"  Missing matches: {len(software_lines) - matches}")
+
+        # Log ALL unmatched software lines so we can diagnose matching issues
+        unmatched = [
+            (sw_line, self.clean_software_line(sw_line))
+            for sw_line, data in mapping.items()
+            if not data['found']
+        ]
+        if unmatched:
+            logger.info(f"  Unmatched software lines ({len(unmatched)}):")
+            for original, cleaned in unmatched:
+                logger.info(f"    '{original}' (cleaned: '{cleaned}')")
 
         # Log examples of matches at debug level
         matched_examples = [
