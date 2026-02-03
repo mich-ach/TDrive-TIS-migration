@@ -4,7 +4,7 @@ Supports both Excel (.xlsx) and CSV (.csv) input formats, returning
 a unified data structure for the mapping workflow.
 
 The CSV format is semicolon-delimited with headers:
-    Project line;Project class
+    Software line;ECU - HW Variante
 
 This matches the output of TIS_Artifact_Fetcher/src/tis_project_lister.py.
 """
@@ -26,8 +26,8 @@ class InputReader:
         {
             'software_lines': ['line1', 'line2', ...],
             'project_data': {
-                'line1': {'Project class': '...'},
-                'line2': {'Project class': '...'},
+                'line1': {'ECU - HW Variante': '...'},
+                'line2': {'ECU - HW Variante': '...'},
             }
         }
     """
@@ -67,7 +67,7 @@ class InputReader:
         Read software line data from a semicolon-delimited CSV.
 
         Expected CSV format:
-            Project line;Project class
+            Software line;ECU - HW Variante
 
         Args:
             file_path: Path to CSV file
@@ -89,14 +89,14 @@ class InputReader:
             headers = [h.strip() for h in lines[0].split(self.DELIMITER)]
 
             header_lower = {h.lower(): i for i, h in enumerate(headers)}
-            if 'project line' not in header_lower:
+            if 'software line' not in header_lower:
                 return {}, (
-                    f"CSV missing required 'Project line' column. "
+                    f"CSV missing required 'Software line' column. "
                     f"Found headers: {headers}"
                 )
 
-            pl_idx = header_lower['project line']
-            pc_idx = header_lower.get('project class')
+            sl_idx = header_lower['software line']
+            ecu_idx = header_lower.get('ecu - hw variante')
 
             row_count = 0
             for line in lines[1:]:
@@ -104,17 +104,17 @@ class InputReader:
                     continue
 
                 fields = line.split(self.DELIMITER)
-                project_line = fields[pl_idx].strip() if pl_idx < len(fields) else ''
-                if not project_line:
+                sw_line = fields[sl_idx].strip() if sl_idx < len(fields) else ''
+                if not sw_line:
                     continue
 
                 row_count += 1
-                software_lines.append(project_line)
+                software_lines.append(sw_line)
 
-                pc_value = fields[pc_idx].strip() if pc_idx is not None and pc_idx < len(fields) else ''
+                ecu_value = fields[ecu_idx].strip() if ecu_idx is not None and ecu_idx < len(fields) else ''
 
-                project_data[project_line] = {
-                    "Project class": pc_value
+                project_data[sw_line] = {
+                    "ECU - HW Variante": ecu_value
                 }
 
             logger.info(f"CSV data loaded: {row_count} software lines")
