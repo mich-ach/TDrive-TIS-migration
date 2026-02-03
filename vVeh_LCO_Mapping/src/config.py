@@ -120,6 +120,7 @@ ARTIFACT_HEADERS = [
     "Project RID",
     "Software Line RID",
     "Latest Artifact Name",
+    "Expected Name Format",
     "Latest Artifact RID",
     "Software Type",
     "LCO Version",
