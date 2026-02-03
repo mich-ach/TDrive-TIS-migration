@@ -578,7 +578,9 @@ class ArtifactFetcher:
                 continue
 
             software_lines = project_response.get('children', [])
+            sw_line_names = [sw.get('name', '?') for sw in software_lines]
             logger.info(f"  Found {len(software_lines)} software lines")
+            logger.debug(f"  SW line names: {sw_line_names}")
 
             structured_data[project_name] = {
                 'project_rid': project_id,
@@ -704,8 +706,8 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
         but only with artifacts of that component_type
     """
     by_component = {}
-    # Track software lines that have no artifacts at all
-    empty_sw_lines = []  # list of (project_name, project_rid, sw_line_name, sw_line_rid)
+    # Track ALL software lines for completeness pass later
+    all_sw_lines = []  # list of (project_name, project_rid, sw_line_name, sw_line_rid)
 
     total_sw_lines = 0
     for project_name, project_data in structured_data.items():
@@ -716,9 +718,8 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
             sw_line_rid = sw_line_data['software_line_rid']
             artifacts = sw_line_data.get('artifacts', [])
 
-            if not artifacts:
-                empty_sw_lines.append((project_name, project_rid, sw_line_name, sw_line_rid))
-                continue
+            # Track every SW line for the completeness pass
+            all_sw_lines.append((project_name, project_rid, sw_line_name, sw_line_rid))
 
             for artifact in artifacts:
                 comp_type = artifact.get('component_type', 'unknown')
@@ -741,15 +742,17 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
 
                 by_component[comp_type][project_name]['software_lines'][sw_line_name]['artifacts'].append(artifact)
 
-    # Add software lines without artifacts to every component type
+    # Ensure EVERY software line appears in EVERY component type.
+    # A SW line may have artifacts only for one type (e.g. test_ECU-TEST) but not
+    # another (e.g. vVeh_LCO). Without this, it would be missing from the vVeh_LCO
+    # output and incorrectly reported as "not found in TIS".
     logger.info(f"  separate_by_component_type: {total_sw_lines} total SW lines, "
-                f"{len(empty_sw_lines)} without artifacts, "
                 f"{len(by_component)} component types found")
 
-    if empty_sw_lines and by_component:
+    if all_sw_lines and by_component:
         for comp_type in by_component:
             added = 0
-            for project_name, project_rid, sw_line_name, sw_line_rid in empty_sw_lines:
+            for project_name, project_rid, sw_line_name, sw_line_rid in all_sw_lines:
                 if project_name not in by_component[comp_type]:
                     by_component[comp_type][project_name] = {
                         'project_rid': project_rid,
@@ -762,9 +765,9 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
                         'artifacts': []
                     }
                     added += 1
-            logger.info(f"  Added {added} empty SW lines to component type '{comp_type}'")
-    elif empty_sw_lines and not by_component:
-        logger.warning(f"  WARNING: {len(empty_sw_lines)} SW lines without artifacts but NO component types found!")
+            logger.info(f"  Added {added} SW lines (without {comp_type} artifacts) to '{comp_type}'")
+    elif all_sw_lines and not by_component:
+        logger.warning(f"  WARNING: {len(all_sw_lines)} SW lines but NO component types found!")
 
     # Log final counts per component type
     for comp_type, comp_data in by_component.items():
@@ -901,10 +904,8 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
     """
     Ensure ALL software lines from TIS are present in structured_data.
 
-    Uses a separate TIS API query (same approach as tis_project_lister.py) to get
-    the complete list of projects and software lines, then adds any missing ones
-    to structured_data with empty artifacts. This guarantees that software lines
-    without a Model folder or any artifacts still appear in the output JSON.
+    Re-fetches the project tree with children_level=1 to verify all direct
+    software line children are present. Adds any missing ones with empty artifacts.
 
     Args:
         structured_data: Output from ArtifactFetcher.extract()
@@ -933,12 +934,28 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
         if INCLUDE_PROJECTS and project_name not in INCLUDE_PROJECTS:
             continue
 
-        # Fetch software lines for this project
         project_data, _, _ = client.get_component(project_id, children_level=1)
         if not project_data:
             continue
 
         software_lines = project_data.get('children', [])
+
+        # Log per-project counts to help diagnose discrepancies
+        existing_count = len(structured_data.get(project_name, {}).get('software_lines', {}))
+        api_count = len(software_lines)
+        api_sw_names = {sw.get('name', '') for sw in software_lines}
+        existing_sw_names = set(structured_data.get(project_name, {}).get('software_lines', {}).keys())
+
+        if api_count != existing_count:
+            logger.info(f"  {project_name}: API returned {api_count} SW lines, "
+                        f"structured_data has {existing_count}")
+            # Show which ones are missing
+            in_api_not_data = api_sw_names - existing_sw_names
+            in_data_not_api = existing_sw_names - api_sw_names
+            if in_api_not_data:
+                logger.info(f"    In API but not in structured_data: {in_api_not_data}")
+            if in_data_not_api:
+                logger.info(f"    In structured_data but not in API: {in_data_not_api}")
 
         # Ensure project exists in structured_data
         if project_name not in structured_data:
@@ -964,6 +981,8 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
                     'artifacts': []
                 }
                 added_count += 1
+                if added_count <= 20:
+                    logger.info(f"    Added missing SW line: {project_name}/{sw_line_name}")
 
     # Log totals
     total_sw = sum(len(p['software_lines']) for p in structured_data.values())
