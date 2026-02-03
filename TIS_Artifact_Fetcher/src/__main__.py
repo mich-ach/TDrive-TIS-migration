@@ -47,6 +47,7 @@ from config import (
     GENERATE_VALIDATION_REPORT,
     TIS_LINK_TEMPLATE,
     NAMING_CONVENTION_ENABLED,
+    NAMING_CONVENTION_PATTERNS,
 )
 
 # Setup logging
@@ -56,6 +57,14 @@ logging.basicConfig(
     datefmt='%H:%M:%S'
 )
 logger = logging.getLogger(__name__)
+
+
+def _get_expected_name_format(component_type: str) -> str:
+    """Get the expected name format description for a component type from config."""
+    if not NAMING_CONVENTION_PATTERNS or not component_type:
+        return ""
+    pattern_config = NAMING_CONVENTION_PATTERNS.get(component_type, {})
+    return pattern_config.get('description', '')
 
 
 def initialize_run_directory() -> Path:
@@ -194,6 +203,7 @@ def generate_validation_report_for_component(
                     'deviation_type': deviation_type.value,
                     'deviation_details': details,
                     'expected_path_hint': hint,
+                    'expected_name_format': _get_expected_name_format(component_type),
                     'name_pattern_matched': matched_pattern,
                     'name_pattern_groups': matched_groups,
                     'test_configuration': artifact.get('test_configuration'),
