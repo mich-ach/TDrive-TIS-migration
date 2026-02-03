@@ -3,13 +3,12 @@
 Supports both Excel (.xlsx) and CSV (.csv) input formats, returning
 a unified data structure for the mapping workflow.
 
-The CSV format is semicolon-delimited with headers:
-    Project line;ECU - HW Variante;Project class
+The CSV format is double-semicolon delimited with headers:
+    Project line;;ECU - HW Variante;;Project class
 
 This matches the output of TIS_Artifact_Fetcher/src/tis_project_lister.py.
 """
 
-import csv
 import logging
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -61,12 +60,14 @@ class InputReader:
         else:
             return {}, f"Unsupported file format: '{suffix}'. Expected .xlsx or .csv"
 
+    DELIMITER = ";;"
+
     def _read_csv(self, file_path: str) -> Tuple[Dict[str, Any], Optional[str]]:
         """
-        Read software line data from a semicolon-delimited CSV.
+        Read software line data from a double-semicolon delimited CSV.
 
         Expected CSV format:
-            Project line;ECU - HW Variante;Project class
+            Project line;;ECU - HW Variante;;Project class
 
         Args:
             file_path: Path to CSV file
@@ -79,47 +80,45 @@ class InputReader:
             project_data = {}
 
             with open(file_path, 'r', encoding='utf-8') as f:
-                reader = csv.DictReader(f, delimiter=';')
+                lines = f.read().splitlines()
 
-                # Validate headers
-                if not reader.fieldnames:
-                    return {}, "CSV file is empty or has no headers"
+            if not lines:
+                return {}, "CSV file is empty"
 
-                has_project_line = any(
-                    h.strip().lower() == 'project line'
-                    for h in reader.fieldnames
+            # Parse headers
+            headers = [h.strip() for h in lines[0].split(self.DELIMITER)]
+
+            header_lower = {h.lower(): i for i, h in enumerate(headers)}
+            if 'project line' not in header_lower:
+                return {}, (
+                    f"CSV missing required 'Project line' column. "
+                    f"Found headers: {headers}"
                 )
-                if not has_project_line:
-                    return {}, (
-                        f"CSV missing required 'Project line' column. "
-                        f"Found headers: {reader.fieldnames}"
-                    )
 
-                # Normalize header names for lookup
-                header_map = {}
-                for h in reader.fieldnames:
-                    header_map[h.strip().lower()] = h
+            pl_idx = header_lower['project line']
+            ecu_idx = header_lower.get('ecu - hw variante')
+            pc_idx = header_lower.get('project class')
 
-                pl_key = header_map.get('project line', '')
-                ecu_key = header_map.get('ecu - hw variante', '')
-                pc_key = header_map.get('project class', '')
+            row_count = 0
+            for line in lines[1:]:
+                if not line.strip():
+                    continue
 
-                row_count = 0
-                for row in reader:
-                    project_line = row.get(pl_key, '').strip()
-                    if not project_line:
-                        continue
+                fields = line.split(self.DELIMITER)
+                project_line = fields[pl_idx].strip() if pl_idx < len(fields) else ''
+                if not project_line:
+                    continue
 
-                    row_count += 1
-                    software_lines.append(project_line)
+                row_count += 1
+                software_lines.append(project_line)
 
-                    ecu_value = row.get(ecu_key, '').strip() if ecu_key else ''
-                    pc_value = row.get(pc_key, '').strip() if pc_key else ''
+                ecu_value = fields[ecu_idx].strip() if ecu_idx is not None and ecu_idx < len(fields) else ''
+                pc_value = fields[pc_idx].strip() if pc_idx is not None and pc_idx < len(fields) else ''
 
-                    project_data[project_line] = {
-                        "ECU - HW Variante": ecu_value,
-                        "Project class": pc_value
-                    }
+                project_data[project_line] = {
+                    "ECU - HW Variante": ecu_value,
+                    "Project class": pc_value
+                }
 
             logger.info(f"CSV data loaded: {row_count} software lines")
 
