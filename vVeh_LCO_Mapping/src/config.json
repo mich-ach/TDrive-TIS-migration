@@ -2,8 +2,8 @@
     "_comment": "vVeh_LCO Software Line Mapping Configuration",
 
     "inputs": {
-        "_comment": "Input file paths - set these to your actual file locations",
-        "excel_file": null,
+        "_comment": "Input file paths. master_file supports .xlsx or .csv (from tis_project_lister)",
+        "master_file": null,
         "artifacts_json": null
     },
 

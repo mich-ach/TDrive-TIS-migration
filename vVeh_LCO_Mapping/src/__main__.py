@@ -34,7 +34,7 @@ import config
 from config import (
     EXCEL_OUTPUT_PREFIX,
     AUTO_OPEN_REPORT,
-    EXCEL_FILE_PATH,
+    MASTER_FILE_PATH,
     ARTIFACTS_JSON_PATH,
 )
 
@@ -224,14 +224,14 @@ def main():
     elif len(sys.argv) == 2:
         # Single argument: assume it's JSON file, use master file from config
         json_file = Path(sys.argv[1]).resolve()
-        if EXCEL_FILE_PATH:
-            master_file = Path(EXCEL_FILE_PATH).resolve()
+        if MASTER_FILE_PATH:
+            master_file = Path(MASTER_FILE_PATH).resolve()
     else:
         # No arguments: use paths from config
         if ARTIFACTS_JSON_PATH:
             json_file = Path(ARTIFACTS_JSON_PATH).resolve()
-        if EXCEL_FILE_PATH:
-            master_file = Path(EXCEL_FILE_PATH).resolve()
+        if MASTER_FILE_PATH:
+            master_file = Path(MASTER_FILE_PATH).resolve()
 
     # Validate inputs
     if not json_file:
@@ -247,7 +247,7 @@ def main():
         logger.info("")
         logger.info("Or set paths in config.json:")
         logger.info('  "inputs": {')
-        logger.info('    "excel_file": "/path/to/masterdata.xlsx or .csv",')
+        logger.info('    "master_file": "/path/to/masterdata.xlsx or .csv",')
         logger.info('    "artifacts_json": "/path/to/vVeh_LCO_artifacts.json"')
         logger.info('  }')
         sys.exit(1)
