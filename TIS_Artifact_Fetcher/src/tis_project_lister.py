@@ -10,7 +10,7 @@ Usage:
     python -m src.tis_project_lister --output my_projects.csv
 
 Output CSV format (semicolon-delimited):
-    Project line;Project class
+    Software line;ECU - HW Variante
     SoftwareLine1;ProjectA
     SoftwareLine2;ProjectA
     SoftwareLine3;ProjectB
@@ -45,7 +45,7 @@ _console_handler.setFormatter(logging.Formatter(
 logger.addHandler(_console_handler)
 
 # CSV column headers (matching vVeh_LCO_Mapping input format)
-CSV_HEADERS = ["Project line", "Project class"]
+CSV_HEADERS = ["Software line", "ECU - HW Variante"]
 
 
 def list_projects_and_software_lines(client: TISClient) -> list:
@@ -56,7 +56,7 @@ def list_projects_and_software_lines(client: TISClient) -> list:
         client: Initialized TISClient instance
 
     Returns:
-        List of dicts with keys: Project line, Project class
+        List of dicts with keys: Software line, ECU - HW Variante
     """
     entries = []
 
@@ -99,8 +99,8 @@ def list_projects_and_software_lines(client: TISClient) -> list:
             sw_line_name = sw_line.get('name', '')
             if sw_line_name:
                 entries.append({
-                    "Project line": sw_line_name,
-                    "Project class": project_name
+                    "Software line": sw_line_name,
+                    "ECU - HW Variante": project_name
                 })
 
     return entries
@@ -159,7 +159,7 @@ def main():
         sys.exit(1)
 
     # Summary
-    unique_projects = len(set(e["Project class"] for e in entries))
+    unique_projects = len(set(e["ECU - HW Variante"] for e in entries))
     logger.info(f"Total: {len(entries)} software lines across {unique_projects} projects")
 
     # Write CSV

@@ -692,6 +692,10 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
     """
     Separate artifacts by component_type into separate data structures.
 
+    Software lines without any artifacts are included in every component type
+    with an empty artifacts list, so they are not incorrectly treated as
+    missing from TIS.
+
     Args:
         structured_data: Output from ArtifactFetcher.extract()
 
@@ -700,6 +704,8 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
         but only with artifacts of that component_type
     """
     by_component = {}
+    # Track software lines that have no artifacts at all
+    empty_sw_lines = []  # list of (project_name, project_rid, sw_line_name, sw_line_rid)
 
     for project_name, project_data in structured_data.items():
         project_rid = project_data['project_rid']
@@ -707,6 +713,10 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
         for sw_line_name, sw_line_data in project_data['software_lines'].items():
             sw_line_rid = sw_line_data['software_line_rid']
             artifacts = sw_line_data.get('artifacts', [])
+
+            if not artifacts:
+                empty_sw_lines.append((project_name, project_rid, sw_line_name, sw_line_rid))
+                continue
 
             for artifact in artifacts:
                 comp_type = artifact.get('component_type', 'unknown')
@@ -728,6 +738,22 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
                     }
 
                 by_component[comp_type][project_name]['software_lines'][sw_line_name]['artifacts'].append(artifact)
+
+    # Add software lines without artifacts to every component type
+    if empty_sw_lines and by_component:
+        for comp_type in by_component:
+            for project_name, project_rid, sw_line_name, sw_line_rid in empty_sw_lines:
+                if project_name not in by_component[comp_type]:
+                    by_component[comp_type][project_name] = {
+                        'project_rid': project_rid,
+                        'software_lines': {}
+                    }
+
+                if sw_line_name not in by_component[comp_type][project_name]['software_lines']:
+                    by_component[comp_type][project_name]['software_lines'][sw_line_name] = {
+                        'software_line_rid': sw_line_rid,
+                        'artifacts': []
+                    }
 
     return by_component
 
