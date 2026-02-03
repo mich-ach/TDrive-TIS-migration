@@ -4,7 +4,7 @@ Supports both Excel (.xlsx) and CSV (.csv) input formats, returning
 a unified data structure for the mapping workflow.
 
 The CSV format is semicolon-delimited with headers:
-    Project line;ECU - HW Variante;Project class
+    Project line;Project class
 
 This matches the output of TIS_Artifact_Fetcher/src/tis_project_lister.py.
 """
@@ -26,8 +26,8 @@ class InputReader:
         {
             'software_lines': ['line1', 'line2', ...],
             'project_data': {
-                'line1': {'ECU - HW Variante': '...', 'Project class': '...'},
-                'line2': {'ECU - HW Variante': '...', 'Project class': '...'},
+                'line1': {'Project class': '...'},
+                'line2': {'Project class': '...'},
             }
         }
     """
@@ -67,7 +67,7 @@ class InputReader:
         Read software line data from a semicolon-delimited CSV.
 
         Expected CSV format:
-            Project line;ECU - HW Variante;Project class
+            Project line;Project class
 
         Args:
             file_path: Path to CSV file
@@ -96,7 +96,6 @@ class InputReader:
                 )
 
             pl_idx = header_lower['project line']
-            ecu_idx = header_lower.get('ecu - hw variante')
             pc_idx = header_lower.get('project class')
 
             row_count = 0
@@ -112,11 +111,9 @@ class InputReader:
                 row_count += 1
                 software_lines.append(project_line)
 
-                ecu_value = fields[ecu_idx].strip() if ecu_idx is not None and ecu_idx < len(fields) else ''
                 pc_value = fields[pc_idx].strip() if pc_idx is not None and pc_idx < len(fields) else ''
 
                 project_data[project_line] = {
-                    "ECU - HW Variante": ecu_value,
                     "Project class": pc_value
                 }
 

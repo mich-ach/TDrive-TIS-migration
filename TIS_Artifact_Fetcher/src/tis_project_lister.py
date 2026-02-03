@@ -10,10 +10,10 @@ Usage:
     python -m src.tis_project_lister --output my_projects.csv
 
 Output CSV format (semicolon-delimited):
-    Project line;ECU - HW Variante;Project class
-    SoftwareLine1;;ProjectA
-    SoftwareLine2;;ProjectA
-    SoftwareLine3;;ProjectB
+    Project line;Project class
+    SoftwareLine1;ProjectA
+    SoftwareLine2;ProjectA
+    SoftwareLine3;ProjectB
 """
 
 import argparse
@@ -44,8 +44,8 @@ _console_handler.setFormatter(logging.Formatter(
 ))
 logger.addHandler(_console_handler)
 
-# CSV column headers (matching Excel master format for vVeh_LCO_Mapping compatibility)
-CSV_HEADERS = ["Project line", "ECU - HW Variante", "Project class"]
+# CSV column headers (matching vVeh_LCO_Mapping input format)
+CSV_HEADERS = ["Project line", "Project class"]
 
 
 def list_projects_and_software_lines(client: TISClient) -> list:
@@ -56,7 +56,7 @@ def list_projects_and_software_lines(client: TISClient) -> list:
         client: Initialized TISClient instance
 
     Returns:
-        List of dicts with keys: project_line, ecu_hw_variante, project_class
+        List of dicts with keys: Project line, Project class
     """
     entries = []
 
@@ -100,7 +100,6 @@ def list_projects_and_software_lines(client: TISClient) -> list:
             if sw_line_name:
                 entries.append({
                     "Project line": sw_line_name,
-                    "ECU - HW Variante": "",
                     "Project class": project_name
                 })
 
