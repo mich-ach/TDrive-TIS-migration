@@ -157,11 +157,18 @@ class Check:
 
         logger.info(f"[Step: Load Artifacts] Total artifacts loaded: {len(self.__av)}")
 
+        # Keep a reference to all artifacts before compare() filters them
+        self.__all_artifacts = self.__av
+
         logger.info(f"[Step: Load Missing] Loading missing PVER entries from: {missing}")
         with open(missing, 'r') as f:
             reader = csv.reader(f, delimiter=';')
-            self.__miss = [{"PVER": row[0], "ECU": row[1], "Project": row[2]} for row in reader if row[4] == "No"]
-        logger.info(f"[Step: Load Missing] Loaded {len(self.__miss)} missing PVER entries")
+            all_rows = [{"PVER": row[0], "ECU": row[1], "Project": row[2], "status": row[4]} for row in reader if len(row) > 4]
+
+        self.__miss = [r for r in all_rows if r["status"] == "No"]
+        # Keep all PVER entries (regardless of status) for CSV generation
+        self.__all_pver = all_rows
+        logger.info(f"[Step: Load Missing] Loaded {len(self.__miss)} missing PVER entries ({len(all_rows)} total)")
 
     @staticmethod
     def __cut_string(input_string: str) -> str:
@@ -336,10 +343,12 @@ class Check:
             f.write(json.dumps(data, indent=4))
 
     def create_csv(self, output_dir: str = None) -> str:
-        """Generate a CSV listing all unique PVER and Project pairs found on TDrive.
+        """Generate a CSV listing all unique PVER (software line) and ECU (project) pairs found on TDrive.
 
-        Extracts PVER/ECU/Project information from successfully matched artifacts
-        and writes a semicolon-delimited CSV with unique entries.
+        Checks ALL artifacts (with valid Model_Overview HTML containing HEX/A2L paths)
+        against ALL known PVER entries to find which PVERs exist on TDrive. This runs
+        independently of compare()'s filtering, so it covers every artifact, not just
+        those matching the 'missing' list.
 
         Args:
             output_dir: Directory to write the CSV (default: from config.json)
@@ -352,31 +361,54 @@ class Check:
 
         os.makedirs(output_dir, exist_ok=True)
 
-        # Collect unique PVER/Project pairs from matched artifacts
+        # Use all known PVER entries (from missing.xlsx) to scan all artifacts
         seen = set()
         entries = []
 
-        for artifact in self.__av:
-            for pver_entry in artifact.get("PVER", []):
-                pver = pver_entry.get("PVER", "")
-                project = pver_entry.get("Project", "")
-                key = (pver, project)
-                if key not in seen and pver:
-                    seen.add(key)
-                    entries.append({"PVER": pver, "Project": project})
+        for artifact in self._Check__all_artifacts:
+            if not artifact.get("Model_Overview"):
+                continue
 
-        # Sort by project then PVER
-        entries.sort(key=lambda e: (e["Project"], e["PVER"]))
+            model_data = artifact.get("Model_Overview_data", {})
+            a2l_path = model_data.get("A2LFile", "")
+            hex_path = model_data.get("HEXFile", "")
+
+            if not a2l_path and not hex_path:
+                continue
+
+            for pver_entry in self._Check__all_pver:
+                pver = pver_entry.get("PVER", "")
+                ecu = pver_entry.get("ECU", "")
+
+                if not pver or not ecu:
+                    continue
+
+                cut_pver = Check.__cut_string(pver)
+                if (a2l_path and cut_pver in a2l_path) or (hex_path and cut_pver in hex_path):
+                    # Clean ECU: truncate at '-', remove dots
+                    cleaned_ecu = ecu
+                    i = cleaned_ecu.find("-")
+                    if i != -1:
+                        cleaned_ecu = cleaned_ecu[:i]
+                    cleaned_ecu = cleaned_ecu.replace(".", "")
+
+                    key = (pver, cleaned_ecu)
+                    if key not in seen:
+                        seen.add(key)
+                        entries.append({"PVER": pver, "ECU": cleaned_ecu})
+
+        # Sort by ECU (project) then PVER (software line)
+        entries.sort(key=lambda e: (e["ECU"], e["PVER"]))
 
         output_path = os.path.join(output_dir, "tdrive_pver_projects.csv")
-        headers = ["PVER", "Project"]
+        headers = ["Software line", "Project"]
 
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(';'.join(headers) + '\n')
             for entry in entries:
-                f.write(f"{entry['PVER']};{entry['Project']}\n")
+                f.write(f"{entry['PVER']};{entry['ECU']}\n")
 
-        logger.info(f"[Step: CSV] Saved {len(entries)} unique PVER/Project pairs to: {output_path}")
+        logger.info(f"[Step: CSV] Saved {len(entries)} unique PVER/ECU pairs to: {output_path}")
         return output_path
 
     @staticmethod

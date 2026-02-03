@@ -35,7 +35,6 @@ ARTIFACT_HEADERS = [
     "Project RID",
     "Software Line RID",
     "Latest Artifact Name",
-    "Expected Name Format",
     "Latest Artifact RID",
     "Software Type",
     "LCO Version",
@@ -45,8 +44,6 @@ ARTIFACT_HEADERS = [
     "Upload Path",
     "TIS Link"
 ]
-
-EXPECTED_NAME_FORMAT = "VW MDL : <Project> / <Subversion> ; <id>"
 
 EXPLANATION_TEXT = [
     "Software Line Mapping Report",
@@ -265,20 +262,19 @@ class ReportGenerator:
 
         if artifact_found:
             ws.cell(row=row, column=col + 4, value=latest_artifact.get('name'))
-            ws.cell(row=row, column=col + 5, value=EXPECTED_NAME_FORMAT)
             artifact_rid = latest_artifact.get('artifact_rid')
-            ws.cell(row=row, column=col + 6, value=artifact_rid)
-            ws.cell(row=row, column=col + 7, value=latest_artifact.get('software_type'))
-            ws.cell(row=row, column=col + 8, value=latest_artifact.get('lco_version'))
-            ws.cell(row=row, column=col + 9, value=latest_artifact.get('vemox_version'))
-            ws.cell(row=row, column=col + 10, value=latest_artifact.get('labcar_type'))
-            ws.cell(row=row, column=col + 11, value=latest_artifact.get('life_cycle_status'))
-            ws.cell(row=row, column=col + 12, value=latest_artifact.get('upload_path'))
+            ws.cell(row=row, column=col + 5, value=artifact_rid)
+            ws.cell(row=row, column=col + 6, value=latest_artifact.get('software_type'))
+            ws.cell(row=row, column=col + 7, value=latest_artifact.get('lco_version'))
+            ws.cell(row=row, column=col + 8, value=latest_artifact.get('vemox_version'))
+            ws.cell(row=row, column=col + 9, value=latest_artifact.get('labcar_type'))
+            ws.cell(row=row, column=col + 10, value=latest_artifact.get('life_cycle_status'))
+            ws.cell(row=row, column=col + 11, value=latest_artifact.get('upload_path'))
 
             # Add TIS link using artifact_rid
             if artifact_rid:
                 tis_link = TIS_LINK_TEMPLATE.format(artifact_rid)
-                tis_cell = ws.cell(row=row, column=col + 13, value=tis_link)
+                tis_cell = ws.cell(row=row, column=col + 12, value=tis_link)
                 tis_cell.hyperlink = tis_link
                 tis_cell.style = "Hyperlink"
 
