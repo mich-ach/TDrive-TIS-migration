@@ -1,4 +1,4 @@
-"""Handler classes for directory and Excel operations.
+"""Handler classes for directory, input reading, and Excel operations.
 
 This module provides classes for managing directories and Excel file operations.
 
@@ -6,12 +6,14 @@ Classes:
     DirectoryHandler: Handles directory operations for the TIS artifact extraction workflow
     ExcelHandler: Facade combining Excel reading, mapping, and report generation
     ExcelReader: Handles reading data from Excel files
+    InputReader: Reads software line data from Excel or CSV files
     MappingHandler: Handles software line matching and mapping
     ReportGenerator: Generates Excel reports for mapping results
 """
 
 from .directory_handler import DirectoryHandler
 from .excel_reader import ExcelReader
+from .input_reader import InputReader
 from .mapping_handler import MappingHandler
 from .report_generator import ReportGenerator
 
@@ -66,6 +68,7 @@ __all__ = [
     'DirectoryHandler',
     'ExcelHandler',
     'ExcelReader',
+    'InputReader',
     'MappingHandler',
     'ReportGenerator',
 ]
