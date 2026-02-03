@@ -336,10 +336,11 @@ class Check:
             f.write(json.dumps(data, indent=4))
 
     def create_csv(self, output_dir: str = None) -> str:
-        """Generate a CSV listing all unique PVER and Project pairs found on TDrive.
+        """Generate a CSV listing all unique PVER (software line) and ECU (project) pairs found on TDrive.
 
-        Extracts PVER/ECU/Project information from successfully matched artifacts
-        and writes a semicolon-delimited CSV with unique entries.
+        Extracts PVER and ECU information from successfully matched artifacts
+        and writes a semicolon-delimited CSV with unique entries. ECU is cleaned
+        the same way as in compare() (truncated at '-', dots removed).
 
         Args:
             output_dir: Directory to write the CSV (default: from config.json)
@@ -352,31 +353,41 @@ class Check:
 
         os.makedirs(output_dir, exist_ok=True)
 
-        # Collect unique PVER/Project pairs from matched artifacts
+        # Collect unique PVER/ECU pairs from matched artifacts
         seen = set()
         entries = []
 
         for artifact in self.__av:
             for pver_entry in artifact.get("PVER", []):
                 pver = pver_entry.get("PVER", "")
-                project = pver_entry.get("Project", "")
-                key = (pver, project)
-                if key not in seen and pver:
-                    seen.add(key)
-                    entries.append({"PVER": pver, "Project": project})
+                ecu = pver_entry.get("ECU", "")
 
-        # Sort by project then PVER
-        entries.sort(key=lambda e: (e["Project"], e["PVER"]))
+                if not pver or not ecu:
+                    continue
+
+                # Clean ECU the same way as compare(): truncate at '-', remove dots
+                i = ecu.find("-")
+                if i != -1:
+                    ecu = ecu[:i]
+                ecu = ecu.replace(".", "")
+
+                key = (pver, ecu)
+                if key not in seen:
+                    seen.add(key)
+                    entries.append({"PVER": pver, "ECU": ecu})
+
+        # Sort by ECU (project) then PVER (software line)
+        entries.sort(key=lambda e: (e["ECU"], e["PVER"]))
 
         output_path = os.path.join(output_dir, "tdrive_pver_projects.csv")
-        headers = ["PVER", "Project"]
+        headers = ["Software line", "Project"]
 
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(';'.join(headers) + '\n')
             for entry in entries:
-                f.write(f"{entry['PVER']};{entry['Project']}\n")
+                f.write(f"{entry['PVER']};{entry['ECU']}\n")
 
-        logger.info(f"[Step: CSV] Saved {len(entries)} unique PVER/Project pairs to: {output_path}")
+        logger.info(f"[Step: CSV] Saved {len(entries)} unique PVER/ECU pairs to: {output_path}")
         return output_path
 
     @staticmethod
