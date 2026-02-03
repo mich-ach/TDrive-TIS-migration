@@ -335,6 +335,50 @@ class Check:
         with open(output_path, 'w') as f:
             f.write(json.dumps(data, indent=4))
 
+    def create_csv(self, output_dir: str = None) -> str:
+        """Generate a CSV listing all unique PVER and Project pairs found on TDrive.
+
+        Extracts PVER/ECU/Project information from successfully matched artifacts
+        and writes a semicolon-delimited CSV with unique entries.
+
+        Args:
+            output_dir: Directory to write the CSV (default: from config.json)
+
+        Returns:
+            Path to the generated CSV file
+        """
+        if output_dir is None:
+            output_dir = OUTPUT_DIR
+
+        os.makedirs(output_dir, exist_ok=True)
+
+        # Collect unique PVER/Project pairs from matched artifacts
+        seen = set()
+        entries = []
+
+        for artifact in self.__av:
+            for pver_entry in artifact.get("PVER", []):
+                pver = pver_entry.get("PVER", "")
+                project = pver_entry.get("Project", "")
+                key = (pver, project)
+                if key not in seen and pver:
+                    seen.add(key)
+                    entries.append({"PVER": pver, "Project": project})
+
+        # Sort by project then PVER
+        entries.sort(key=lambda e: (e["Project"], e["PVER"]))
+
+        output_path = os.path.join(output_dir, "tdrive_pver_projects.csv")
+        headers = ["PVER", "Project"]
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(';'.join(headers) + '\n')
+            for entry in entries:
+                f.write(f"{entry['PVER']};{entry['Project']}\n")
+
+        logger.info(f"[Step: CSV] Saved {len(entries)} unique PVER/Project pairs to: {output_path}")
+        return output_path
+
     @staticmethod
     def transform_excel(file_in: str, file_out: str) -> None:
         """transform missing.xlsx to csv which Check() can work with

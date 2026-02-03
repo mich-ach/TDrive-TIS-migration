@@ -88,6 +88,11 @@ if __name__ == '__main__':
     check.dump()  # Will use OUTPUT_DIR from config by default
     logger.info("Comparison complete. Results dumped to 'check.json'.")
 
+    # Generate CSV of PVER/Project pairs found on TDrive
+    logger.info("Generating PVER/Project CSV...")
+    check.create_csv()
+    logger.info("PVER/Project CSV generated.")
+
     # Create the final migration JSON for TIS upload
     logger.info("Generating migration JSON for TIS upload...")
     Check.create_mig(output_check)  # Will use OUTPUT_DIR from config by default
