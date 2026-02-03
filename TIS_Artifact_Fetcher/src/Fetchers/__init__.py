@@ -707,10 +707,12 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
     # Track software lines that have no artifacts at all
     empty_sw_lines = []  # list of (project_name, project_rid, sw_line_name, sw_line_rid)
 
+    total_sw_lines = 0
     for project_name, project_data in structured_data.items():
         project_rid = project_data['project_rid']
 
         for sw_line_name, sw_line_data in project_data['software_lines'].items():
+            total_sw_lines += 1
             sw_line_rid = sw_line_data['software_line_rid']
             artifacts = sw_line_data.get('artifacts', [])
 
@@ -740,8 +742,13 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
                 by_component[comp_type][project_name]['software_lines'][sw_line_name]['artifacts'].append(artifact)
 
     # Add software lines without artifacts to every component type
+    logger.info(f"  separate_by_component_type: {total_sw_lines} total SW lines, "
+                f"{len(empty_sw_lines)} without artifacts, "
+                f"{len(by_component)} component types found")
+
     if empty_sw_lines and by_component:
         for comp_type in by_component:
+            added = 0
             for project_name, project_rid, sw_line_name, sw_line_rid in empty_sw_lines:
                 if project_name not in by_component[comp_type]:
                     by_component[comp_type][project_name] = {
@@ -754,6 +761,15 @@ def separate_by_component_type(structured_data: Dict[str, Any]) -> Dict[str, Dic
                         'software_line_rid': sw_line_rid,
                         'artifacts': []
                     }
+                    added += 1
+            logger.info(f"  Added {added} empty SW lines to component type '{comp_type}'")
+    elif empty_sw_lines and not by_component:
+        logger.warning(f"  WARNING: {len(empty_sw_lines)} SW lines without artifacts but NO component types found!")
+
+    # Log final counts per component type
+    for comp_type, comp_data in by_component.items():
+        sw_count = sum(len(p['software_lines']) for p in comp_data.values())
+        logger.info(f"  Component '{comp_type}': {sw_count} total SW lines in output")
 
     return by_component
 
@@ -949,10 +965,10 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
                 }
                 added_count += 1
 
-    if added_count > 0:
-        logger.info(f"  Added {added_count} software lines that had no artifacts")
-    else:
-        logger.info("  All software lines already present")
+    # Log totals
+    total_sw = sum(len(p['software_lines']) for p in structured_data.values())
+    logger.info(f"  ensure_all_software_lines: {total_sw} total SW lines in structured_data "
+                f"({added_count} newly added)")
 
     return structured_data
 
