@@ -573,13 +573,14 @@ class ArtifactFetcher:
 
             logger.info(f"[{project_idx}/{total_projects}] Processing project: {project_name}")
 
-            # Use children_level=-1 (unlimited) to avoid truncation for projects with many SW lines
-            project_response, _, _ = self.client.get_component(project_id, children_level=-1)
+            project_response, _, _ = self.client.get_component(project_id, children_level=1)
             if not project_response:
                 continue
 
             software_lines = project_response.get('children', [])
+            sw_line_names = [sw.get('name', '?') for sw in software_lines]
             logger.info(f"  Found {len(software_lines)} software lines")
+            logger.debug(f"  SW line names: {sw_line_names}")
 
             structured_data[project_name] = {
                 'project_rid': project_id,
@@ -902,9 +903,8 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
     """
     Ensure ALL software lines from TIS are present in structured_data.
 
-    Uses children_level=-1 (unlimited) to fetch the complete list of software lines
-    per project, avoiding potential truncation that may occur with children_level=1
-    for projects with many software lines.
+    Re-fetches the project tree with children_level=1 to verify all direct
+    software line children are present. Adds any missing ones with empty artifacts.
 
     Args:
         structured_data: Output from ArtifactFetcher.extract()
@@ -912,7 +912,7 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
     Returns:
         The same structured_data dict, updated in-place with any missing software lines
     """
-    logger.info("Ensuring all software lines from TIS are included (using unlimited depth)...")
+    logger.info("Ensuring all software lines from TIS are included...")
 
     client = TISClient(enable_cache=True)
     root_data, _, _ = client.get_component(VW_XCU_PROJECT_ID, children_level=1)
@@ -933,23 +933,28 @@ def ensure_all_software_lines(structured_data: Dict[str, Any]) -> Dict[str, Any]
         if INCLUDE_PROJECTS and project_name not in INCLUDE_PROJECTS:
             continue
 
-        # Use children_level=-1 (unlimited) to get ALL software lines,
-        # avoiding potential truncation for projects with many children
-        project_data, _, _ = client.get_component(project_id, children_level=-1)
+        project_data, _, _ = client.get_component(project_id, children_level=1)
         if not project_data:
-            # Fall back to children_level=1 if unlimited fails
-            project_data, _, _ = client.get_component(project_id, children_level=1)
-            if not project_data:
-                continue
+            continue
 
         software_lines = project_data.get('children', [])
 
-        # Log per-project counts to help diagnose truncation
+        # Log per-project counts to help diagnose discrepancies
         existing_count = len(structured_data.get(project_name, {}).get('software_lines', {}))
         api_count = len(software_lines)
+        api_sw_names = {sw.get('name', '') for sw in software_lines}
+        existing_sw_names = set(structured_data.get(project_name, {}).get('software_lines', {}).keys())
+
         if api_count != existing_count:
             logger.info(f"  {project_name}: API returned {api_count} SW lines, "
                         f"structured_data has {existing_count}")
+            # Show which ones are missing
+            in_api_not_data = api_sw_names - existing_sw_names
+            in_data_not_api = existing_sw_names - api_sw_names
+            if in_api_not_data:
+                logger.info(f"    In API but not in structured_data: {in_api_not_data}")
+            if in_data_not_api:
+                logger.info(f"    In structured_data but not in API: {in_data_not_api}")
 
         # Ensure project exists in structured_data
         if project_name not in structured_data:
