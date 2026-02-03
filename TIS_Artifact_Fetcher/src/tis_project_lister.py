@@ -17,7 +17,6 @@ Output CSV format (semicolon-delimited):
 """
 
 import argparse
-import csv
 import datetime
 import logging
 import sys
@@ -118,10 +117,11 @@ def write_csv(entries: list, output_path: Path) -> None:
     """
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with open(output_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_HEADERS, delimiter=';')
-        writer.writeheader()
-        writer.writerows(entries)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(';'.join(CSV_HEADERS) + '\n')
+        for entry in entries:
+            values = [entry.get(h, '') for h in CSV_HEADERS]
+            f.write(';'.join(values) + '\n')
 
     logger.info(f"CSV written: {output_path} ({len(entries)} entries)")
 

@@ -63,7 +63,7 @@ COLORS = _config["excel"]["colors"]
 # INPUT FILE PATHS
 # =============================================================================
 
-EXCEL_FILE_PATH = _config.get("inputs", {}).get("excel_file")
+MASTER_FILE_PATH = _config.get("inputs", {}).get("master_file")
 ARTIFACTS_JSON_PATH = _config.get("inputs", {}).get("artifacts_json")
 
 # =============================================================================
