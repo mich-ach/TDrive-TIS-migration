@@ -178,12 +178,15 @@ class Check:
             input_string (str): string to cut
 
         Returns:
-            str: cut string
+            str: cut string (with leading non-alphanumeric chars stripped first)
         """
-        for i, char in enumerate(input_string):
+        # Strip leading non-alphanumeric characters first (e.g., "_SharedWs" -> "SharedWs")
+        stripped = input_string.lstrip('_-. ')
+
+        for i, char in enumerate(stripped):
             if not ('a' <= char <= 'z' or 'A' <= char <= 'Z' or '0' <= char <= '9'):
-                return input_string[:i]
-        return input_string
+                return stripped[:i]
+        return stripped
 
     def compare(self) -> None:
         """compares available data with missing data

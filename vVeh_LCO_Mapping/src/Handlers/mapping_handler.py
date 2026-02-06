@@ -24,12 +24,17 @@ class MappingHandler:
         Examples:
             "MED17.1.10-6.1" -> "MED17110" (split at dash, remove dots)
             "MG1CS001_test" -> "MG1CS001" (split at underscore)
+            "_SharedWs" -> "SHAREDWS" (leading underscore stripped first)
         """
         if not sw_line:
             return ""
 
-        # First, take everything before underscore, space, dash, or opening bracket
-        cleaned = re.split(r'[_\s\-\(\[\{]', sw_line)[0]
+        # Strip leading split characters (underscore, dash, etc.) before splitting
+        stripped = sw_line.lstrip('_-')
+
+        # Take everything before underscore, space, dash, or opening bracket
+        parts = re.split(r'[_\s\-\(\[\{]', stripped)
+        cleaned = parts[0] if parts else stripped
 
         # Remove special characters (dots, etc.)
         cleaned = re.sub(r'[^a-zA-Z0-9]', '', cleaned)
