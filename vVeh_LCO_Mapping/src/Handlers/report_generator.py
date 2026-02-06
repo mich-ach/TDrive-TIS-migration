@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Column definitions
 MASTER_DATA_HEADERS = [
     "Software Line",
-    "ECU - HW Variante"
+    "Project"
 ]
 
 TIS_STATUS_HEADER = ["Software Line Found in TIS"]
