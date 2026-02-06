@@ -387,6 +387,7 @@ def run_extraction_workflow(open_gui: bool = False) -> bool:
         traceback.print_exc()
         return False
 
+
 def main():
     """Main entry point."""
     open_gui = "--gui" in sys.argv

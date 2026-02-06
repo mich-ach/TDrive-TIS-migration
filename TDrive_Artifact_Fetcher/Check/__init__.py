@@ -163,7 +163,7 @@ class Check:
         logger.info(f"[Step: Load Missing] Loading missing PVER entries from: {missing}")
         with open(missing, 'r') as f:
             reader = csv.reader(f, delimiter=';')
-            all_rows = [{"PVER": row[0], "ECU": row[1], "Project": row[2], "status": row[4]} for row in reader if len(row) > 4]
+            all_rows = [{"PVER": row[0], "Project": row[1], "status": row[4]} for row in reader if len(row) > 4]
 
         self.__miss = [r for r in all_rows if r["status"] == "No"]
         # Keep all PVER entries (regardless of status) for CSV generation
@@ -246,7 +246,7 @@ class Check:
                 if is_debug_example:
                     logger.debug(f"[Step: Compare]   Result: MATCHED with {len(e['PVER'])} PVER entries")
                     for pver in e["PVER"]:
-                        logger.debug(f"[Step: Compare]     -> PVER={pver['PVER']}, ECU={pver['ECU']}, Project={pver['Project']}")
+                        logger.debug(f"[Step: Compare]     -> PVER={pver['PVER']}, Project={pver['Project']}")
             elif is_debug_example:
                 logger.debug(f"[Step: Compare]   Result: NO MATCH")
 
@@ -266,10 +266,10 @@ class Check:
                 logger.debug(f"[Step: Transfer] Skipped (no pcie/vme in tail '{path_tail}'): {e['path']}")
                 continue
 
-            ecu = e["PVER"][0]["ECU"]
-            i = ecu.find("-")
+            project = e["PVER"][0]["Project"]
+            i = project.find("-")
             if i != -1:
-                ecu = ecu[:i]
+                project = project[:i]
 
             name = e["Model_Overview_data"]["name"].strip()
             if name.find("VW MDL :") == -1:
@@ -279,14 +279,14 @@ class Check:
             e["transfer"]["model_input_filepath"] = e["path"]
             e["transfer"]["customer_group"] = "VW"
             e["transfer"]["tis_artifact_name"] = e["Model_Overview_data"]["name"].strip()
-            e["transfer"]["tis_artifact_path"] = f"xCU Projects/{ecu.replace('.', '')}/{e['PVER'][0]['PVER']}/Model/HiL/{e['swb']}/{LC_Type}"
+            e["transfer"]["tis_artifact_path"] = f"xCU Projects/{project.replace('.', '')}/{e['PVER'][0]['PVER']}/Model/HiL/{e['swb']}/{LC_Type}"
             e["transfer"]["tis_migration"] = True
             e["transfer"]["lco_migration"] = False
             transfer_count += 1
 
             if transfer_count <= max_debug_examples:
                 logger.debug(f"[Step: Transfer] === Transfer Example {transfer_count} ===")
-                logger.debug(f"[Step: Transfer]   ECU raw='{e['PVER'][0]['ECU']}' -> cleaned='{ecu}'")
+                logger.debug(f"[Step: Transfer]   Project raw='{e['PVER'][0]['Project']}' -> cleaned='{project}'")
                 logger.debug(f"[Step: Transfer]   LC_Type='{LC_Type}' (from path tail: '{path_tail}')")
                 logger.debug(f"[Step: Transfer]   tis_artifact_name='{e['transfer']['tis_artifact_name']}'")
                 logger.debug(f"[Step: Transfer]   tis_artifact_path='{e['transfer']['tis_artifact_path']}'")
@@ -334,8 +334,13 @@ class Check:
         with open(file, 'r') as f:
             data_src = json.load(f)
 
+        # Only include entries that have a "transfer" key (some are skipped in compare())
         data = {"models": []}
-        data["models"] = [e["transfer"] for e in data_src]
+        data["models"] = [e["transfer"] for e in data_src if "transfer" in e]
+
+        skipped = len(data_src) - len(data["models"])
+        if skipped > 0:
+            logger.info(f"[Step: Migration] Skipped {skipped} entries without transfer data")
 
         output_path = os.path.join(output_dir, "mig.json")
         logger.info(f"[Step: Migration] Saving migration file ({len(data['models'])} models) to: {output_path}")
@@ -378,27 +383,27 @@ class Check:
 
             for pver_entry in self._Check__all_pver:
                 pver = pver_entry.get("PVER", "")
-                ecu = pver_entry.get("ECU", "")
+                project = pver_entry.get("Project", "")
 
-                if not pver or not ecu:
+                if not pver or not project:
                     continue
 
                 cut_pver = Check.__cut_string(pver)
                 if (a2l_path and cut_pver in a2l_path) or (hex_path and cut_pver in hex_path):
-                    # Clean ECU: truncate at '-', remove dots
-                    cleaned_ecu = ecu
-                    i = cleaned_ecu.find("-")
+                    # Clean Project: truncate at '-', remove dots
+                    cleaned_project = project
+                    i = cleaned_project.find("-")
                     if i != -1:
-                        cleaned_ecu = cleaned_ecu[:i]
-                    cleaned_ecu = cleaned_ecu.replace(".", "")
+                        cleaned_project = cleaned_project[:i]
+                    cleaned_project = cleaned_project.replace(".", "")
 
-                    key = (pver, cleaned_ecu)
+                    key = (pver, cleaned_project)
                     if key not in seen:
                         seen.add(key)
-                        entries.append({"PVER": pver, "ECU": cleaned_ecu})
+                        entries.append({"PVER": pver, "Project": cleaned_project})
 
-        # Sort by ECU (project) then PVER (software line)
-        entries.sort(key=lambda e: (e["ECU"], e["PVER"]))
+        # Sort by Project then PVER (software line)
+        entries.sort(key=lambda e: (e["Project"], e["PVER"]))
 
         output_path = os.path.join(output_dir, "tdrive_pver_projects.csv")
         headers = ["Software line", "Project"]
@@ -406,9 +411,9 @@ class Check:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(';'.join(headers) + '\n')
             for entry in entries:
-                f.write(f"{entry['PVER']};{entry['ECU']}\n")
+                f.write(f"{entry['PVER']};{entry['Project']}\n")
 
-        logger.info(f"[Step: CSV] Saved {len(entries)} unique PVER/ECU pairs to: {output_path}")
+        logger.info(f"[Step: CSV] Saved {len(entries)} unique PVER/Project pairs to: {output_path}")
         return output_path
 
     @staticmethod

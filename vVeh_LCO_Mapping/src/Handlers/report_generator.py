@@ -23,8 +23,7 @@ logger = logging.getLogger(__name__)
 # Column definitions
 MASTER_DATA_HEADERS = [
     "Software Line",
-    "ECU - HW Variante",
-    "Project class"
+    "Project"
 ]
 
 TIS_STATUS_HEADER = ["Software Line Found in TIS"]
@@ -226,7 +225,6 @@ class ReportGenerator:
 
         ws.cell(row=row, column=1, value=sw_line)
         ws.cell(row=row, column=2, value=master_data.get("ECU - HW Variante", ""))
-        ws.cell(row=row, column=3, value=master_data.get("Project class", ""))
 
         # Add borders to master data cells
         for col in range(1, len(MASTER_DATA_HEADERS) + 1):

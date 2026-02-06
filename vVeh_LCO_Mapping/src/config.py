@@ -108,8 +108,7 @@ EXPLANATION_TEXT = [
 # Excel column definitions
 MASTER_DATA_HEADERS = [
     "Software Line",
-    "ECU - HW Variante",
-    "Project class"
+    "Project"
 ]
 
 TIS_STATUS_HEADER = ["Software Line Found in TIS"]
