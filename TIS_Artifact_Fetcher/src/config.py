@@ -164,3 +164,95 @@ TIS_LINK_TEMPLATE = _config.get("api", {}).get("tis_link_template", "https://rb-
 VEMOX_SVN_PATTERN = r'^vemox(?![._]).+'
 VEMOX_CONAN_PATTERN = r"VeMoX/(\d+(\.\d+)*?)@VeMoX_classic/release#[a-f0-9]+"
 VEMOX_SEARCH_PATH = "mdl/Simulink_VeMoX/src"
+
+
+# =============================================================================
+# METADATA COLLECTION (for output reports)
+# =============================================================================
+
+def get_run_metadata() -> Dict[str, any]:
+    """
+    Collect all configuration metadata for inclusion in output files.
+
+    Returns a dict with all relevant filter and configuration settings
+    that were used during extraction.
+    """
+    return {
+        "app": {
+            "name": APP_TITLE,
+            "version": APP_VERSION,
+        },
+        "api": {
+            "root_project_id": VW_XCU_PROJECT_ID,
+            "tis_url": TIS_URL,
+            "timeout": API_TIMEOUT,
+            "max_retries": API_MAX_RETRIES,
+        },
+        "artifact_filters": {
+            "component_type": COMPONENT_TYPE_FILTER,
+            "component_name": COMPONENT_NAME_FILTER,
+            "component_grp": COMPONENT_GRP_FILTER,
+            "life_cycle_status": LIFE_CYCLE_STATUS_FILTER,
+            "skip_deleted": SKIP_DELETED_ARTIFACTS,
+        },
+        "branch_pruning": {
+            "include_projects": INCLUDE_PROJECTS if INCLUDE_PROJECTS else "(all)",
+            "include_software_lines": INCLUDE_SOFTWARE_LINES if INCLUDE_SOFTWARE_LINES else "(all)",
+            "skip_projects": SKIP_PROJECTS,
+            "skip_folder_patterns": SKIP_FOLDER_PATTERNS,
+        },
+        "optimization": {
+            "concurrent_requests": CONCURRENT_REQUESTS,
+            "children_level": CHILDREN_LEVEL,
+            "cache_max_size": CACHE_MAX_SIZE,
+            "rate_limit_delay": RATE_LIMIT_DELAY,
+        },
+        "validation": {
+            "generate_validation_report": GENERATE_VALIDATION_REPORT,
+            "naming_convention_enabled": NAMING_CONVENTION_ENABLED,
+            "path_convention_enabled": PATH_CONVENTION_ENABLED,
+        },
+        "debug": {
+            "debug_mode": DEBUG_MODE,
+            "log_level": LOG_LEVEL,
+        },
+    }
+
+
+def format_metadata_text(metadata: Dict = None) -> str:
+    """
+    Format metadata as human-readable text for metadata.txt output.
+
+    Args:
+        metadata: Optional pre-collected metadata dict. If None, calls get_run_metadata().
+
+    Returns:
+        Formatted text string with all configuration details.
+    """
+    if metadata is None:
+        metadata = get_run_metadata()
+
+    lines = []
+    lines.append("=" * 60)
+    lines.append("TIS ARTIFACT FETCHER - RUN METADATA")
+    lines.append("=" * 60)
+    lines.append("")
+
+    for section_name, section_data in metadata.items():
+        lines.append(f"[{section_name.upper()}]")
+        if isinstance(section_data, dict):
+            for key, value in section_data.items():
+                if isinstance(value, list):
+                    if value:
+                        lines.append(f"  {key}:")
+                        for item in value:
+                            lines.append(f"    - {item}")
+                    else:
+                        lines.append(f"  {key}: (none)")
+                else:
+                    lines.append(f"  {key}: {value}")
+        else:
+            lines.append(f"  {section_data}")
+        lines.append("")
+
+    return "\n".join(lines)

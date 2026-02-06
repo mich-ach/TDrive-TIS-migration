@@ -21,20 +21,22 @@ def generate_excel_report(
     report: ValidationReport,
     output_dir: Optional[Path] = None,
     component_depth_overrides: Optional[Dict[str, int]] = None,
-    skip_component_type_sheets: bool = False
+    skip_component_type_sheets: bool = False,
+    filter_metadata: Optional[Dict] = None
 ) -> str:
     """
     Generate an Excel report with multiple sheets for accountability.
 
     Sheets:
     1. Summary - Overall statistics including adaptive depth metrics
-    2. All Deviations - Complete list of deviations
-    3. By User - Deviations grouped by uploader (accountability)
-    4. By Project - Deviations grouped by project
-    5. By Component Type - Summary by component type (skipped if skip_component_type_sheets=True)
-    6. Dev-{type} - Per-component deviations (skipped if skip_component_type_sheets=True)
-    7. Valid Artifacts - List of correctly placed artifacts
-    8. Slow Components - Components that required reduced depth (optional)
+    2. Filters - Configuration filters used for this extraction
+    3. All Deviations - Complete list of deviations
+    4. By User - Deviations grouped by uploader (accountability)
+    5. By Project - Deviations grouped by project
+    6. By Component Type - Summary by component type (skipped if skip_component_type_sheets=True)
+    7. Dev-{type} - Per-component deviations (skipped if skip_component_type_sheets=True)
+    8. Valid Artifacts - List of correctly placed artifacts
+    9. Slow Components - Components that required reduced depth (optional)
 
     Args:
         report: The ValidationReport containing all validation results
@@ -42,6 +44,7 @@ def generate_excel_report(
         component_depth_overrides: Dict of component IDs to their reduced depth values
         skip_component_type_sheets: If True, skip "By Component Type" and "Dev-" sheets
                                     (useful when generating per-component reports)
+        filter_metadata: Optional dict of filter/config metadata to include in report
 
     Returns:
         Path to the generated Excel file, or empty string if generation failed
@@ -59,7 +62,7 @@ def generate_excel_report(
         output_dir = Path('.')
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    output_file = output_dir / f"optimized_validation_report_{timestamp}.xlsx"
+    output_file = output_dir / f"validation_report_{timestamp}.xlsx"
 
     wb = Workbook()
 
@@ -76,6 +79,8 @@ def generate_excel_report(
 
     # Create sheets
     _create_summary_sheet(wb, report, header_font, component_depth_overrides)
+    if filter_metadata:
+        _create_filters_sheet(wb, filter_metadata, header_font, header_font_white, header_fill, thin_border)
     _create_deviations_sheet(wb, report, header_font_white, header_fill, thin_border,
                              deviation_fill, warning_fill, get_column_letter)
     _create_by_user_sheet(wb, report, header_font_white, header_fill, thin_border, Alignment)
@@ -125,7 +130,7 @@ def _create_summary_sheet(wb, report, header_font, component_depth_overrides):
     ws_summary.title = "Summary"
 
     summary_data = [
-        ["OPTIMIZED ARTIFACT STRUCTURE VALIDATION REPORT"],
+        ["ARTIFACT STRUCTURE VALIDATION REPORT"],
         [f"Generated: {report.timestamp}"],
         [""],
         ["EXECUTION STATISTICS"],
@@ -178,6 +183,58 @@ def _create_summary_sheet(wb, report, header_font, component_depth_overrides):
 
     ws_summary.column_dimensions['A'].width = 35
     ws_summary.column_dimensions['B'].width = 20
+
+
+def _create_filters_sheet(wb, filter_metadata, header_font, header_font_white, header_fill, thin_border):
+    """Create the Filters sheet showing configuration used for extraction."""
+    ws_filters = wb.create_sheet("Filters")
+
+    row_idx = 1
+
+    # Title
+    cell = ws_filters.cell(row=row_idx, column=1, value="EXTRACTION FILTERS & CONFIGURATION")
+    cell.font = header_font
+    row_idx += 2
+
+    def write_section(section_name: str, section_data: dict):
+        """Write a section of configuration data."""
+        nonlocal row_idx
+
+        # Section header
+        cell = ws_filters.cell(row=row_idx, column=1, value=section_name.upper())
+        cell.font = header_font_white
+        cell.fill = header_fill
+        cell.border = thin_border
+        ws_filters.cell(row=row_idx, column=2, value="").fill = header_fill
+        ws_filters.cell(row=row_idx, column=2).border = thin_border
+        row_idx += 1
+
+        for key, value in section_data.items():
+            ws_filters.cell(row=row_idx, column=1, value=key).border = thin_border
+
+            if isinstance(value, list):
+                if value:
+                    # Join list items with comma for display
+                    display_value = ", ".join(str(v) for v in value)
+                else:
+                    display_value = "(none)"
+            elif value is None:
+                display_value = "(not set)"
+            else:
+                display_value = str(value)
+
+            ws_filters.cell(row=row_idx, column=2, value=display_value).border = thin_border
+            row_idx += 1
+
+        row_idx += 1  # Empty row between sections
+
+    # Write each section from metadata
+    for section_name, section_data in filter_metadata.items():
+        if isinstance(section_data, dict):
+            write_section(section_name, section_data)
+
+    ws_filters.column_dimensions['A'].width = 30
+    ws_filters.column_dimensions['B'].width = 60
 
 
 def _create_deviations_sheet(wb, report, header_font_white, header_fill, thin_border,
