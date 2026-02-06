@@ -62,7 +62,7 @@ def generate_excel_report(
         output_dir = Path('.')
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    output_file = output_dir / f"optimized_validation_report_{timestamp}.xlsx"
+    output_file = output_dir / f"validation_report_{timestamp}.xlsx"
 
     wb = Workbook()
 
@@ -130,7 +130,7 @@ def _create_summary_sheet(wb, report, header_font, component_depth_overrides):
     ws_summary.title = "Summary"
 
     summary_data = [
-        ["OPTIMIZED ARTIFACT STRUCTURE VALIDATION REPORT"],
+        ["ARTIFACT STRUCTURE VALIDATION REPORT"],
         [f"Generated: {report.timestamp}"],
         [""],
         ["EXECUTION STATISTICS"],
