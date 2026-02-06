@@ -334,8 +334,13 @@ class Check:
         with open(file, 'r') as f:
             data_src = json.load(f)
 
+        # Only include entries that have a "transfer" key (some are skipped in compare())
         data = {"models": []}
-        data["models"] = [e["transfer"] for e in data_src]
+        data["models"] = [e["transfer"] for e in data_src if "transfer" in e]
+
+        skipped = len(data_src) - len(data["models"])
+        if skipped > 0:
+            logger.info(f"[Step: Migration] Skipped {skipped} entries without transfer data")
 
         output_path = os.path.join(output_dir, "mig.json")
         logger.info(f"[Step: Migration] Saving migration file ({len(data['models'])} models) to: {output_path}")
