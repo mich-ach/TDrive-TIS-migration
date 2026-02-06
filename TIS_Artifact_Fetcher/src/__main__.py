@@ -48,6 +48,8 @@ from config import (
     TIS_LINK_TEMPLATE,
     NAMING_CONVENTION_ENABLED,
     NAMING_CONVENTION_PATTERNS,
+    get_run_metadata,
+    format_metadata_text,
 )
 
 # Setup logging
@@ -115,7 +117,8 @@ def generate_validation_report_for_component(
     path_validator,
     DeviationType,
     ValidationReport,
-    generate_excel_report
+    generate_excel_report,
+    filter_metadata: Optional[Dict] = None
 ) -> Optional[str]:
     """
     Generate a validation report for a single component type.
@@ -242,7 +245,7 @@ def generate_validation_report_for_component(
 
         # Generate report with custom filename, skip component type sheets since this is per-component
         from Reports import generate_excel_report as _gen_report
-        result = _gen_report(report, output_dir, skip_component_type_sheets=True)
+        result = _gen_report(report, output_dir, skip_component_type_sheets=True, filter_metadata=filter_metadata)
 
         # Rename to component-specific name if successful
         if result:
@@ -255,13 +258,18 @@ def generate_validation_report_for_component(
     return None
 
 
-def generate_validation_reports_by_component(structured_data: Dict[str, Any], output_dir: Path) -> Dict[str, str]:
+def generate_validation_reports_by_component(
+    structured_data: Dict[str, Any],
+    output_dir: Path,
+    filter_metadata: Optional[Dict] = None
+) -> Dict[str, str]:
     """
     Generate separate validation reports for each component type.
 
     Args:
         structured_data: The extracted artifact data from ArtifactFetcher.extract()
         output_dir: Directory to save the validation reports
+        filter_metadata: Optional dict of filter/config metadata to include in reports
 
     Returns:
         Dict mapping component_name to output file path
@@ -292,7 +300,8 @@ def generate_validation_reports_by_component(structured_data: Dict[str, Any], ou
             path_validator=path_validator,
             DeviationType=DeviationType,
             ValidationReport=ValidationReport,
-            generate_excel_report=generate_excel_report
+            generate_excel_report=generate_excel_report,
+            filter_metadata=filter_metadata
         )
 
         if output_file:
@@ -332,6 +341,17 @@ def run_extraction_workflow(open_gui: bool = False) -> bool:
             logger.error("Extraction failed!")
             return False
 
+        # Write metadata.txt with all filter/config settings used
+        metadata = get_run_metadata()
+        metadata["run"] = {
+            "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "output_directory": str(run_dir),
+        }
+        metadata_file = run_dir / "metadata.txt"
+        with open(metadata_file, 'w', encoding='utf-8') as f:
+            f.write(format_metadata_text(metadata))
+        logger.info(f"Metadata saved: {metadata_file.name}")
+
         # List output files
         output_files = list(run_dir.glob("*_artifacts_*.json"))
         output_files = [f for f in output_files if not f.name.startswith("latest_")]
@@ -344,11 +364,14 @@ def run_extraction_workflow(open_gui: bool = False) -> bool:
         logger.info(f"Generated files:")
         for f in sorted(output_files):
             logger.info(f"  - {f.name}")
+        logger.info(f"  - {metadata_file.name}")
 
         # Generate validation reports (one per component type) if enabled
         if GENERATE_VALIDATION_REPORT and structured_data:
             logger.info("")
-            validation_report_files = generate_validation_reports_by_component(structured_data, run_dir)
+            validation_report_files = generate_validation_reports_by_component(
+                structured_data, run_dir, filter_metadata=metadata
+            )
             if validation_report_files:
                 logger.info(f"Generated {len(validation_report_files)} validation report(s)")
 
