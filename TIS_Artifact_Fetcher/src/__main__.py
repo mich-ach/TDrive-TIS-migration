@@ -395,13 +395,31 @@ def run_extraction_workflow(open_gui: bool = False) -> bool:
 
 def main():
     """Main entry point."""
-    open_gui = "--gui" in sys.argv
-
     if "--help" in sys.argv or "-h" in sys.argv:
         print(__doc__)
+        print("\nOptions:")
+        print("  --gui       Open the artifact viewer GUI only (no extraction)")
+        print("  --help, -h  Show this help message")
         sys.exit(0)
 
-    success = run_extraction_workflow(open_gui=open_gui)
+    # GUI-only mode: just launch the viewer without extraction
+    if "--gui" in sys.argv:
+        logger.info("Launching Artifact Viewer GUI...")
+        # Find most recent run directory
+        if config.OUTPUT_DIR.exists():
+            run_dirs = sorted(config.OUTPUT_DIR.glob("run_*"), key=lambda x: x.stat().st_mtime, reverse=True)
+            if run_dirs:
+                launch_artifact_viewer(run_dirs[0])
+            else:
+                # Try finding JSON files directly in output dir
+                launch_artifact_viewer(config.OUTPUT_DIR)
+        else:
+            logger.error(f"Output directory not found: {config.OUTPUT_DIR}")
+            sys.exit(1)
+        sys.exit(0)
+
+    # Default: run extraction without GUI
+    success = run_extraction_workflow(open_gui=False)
     sys.exit(0 if success else 1)
 
 
