@@ -39,6 +39,11 @@ import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+# Ensure the src directory is in the path for imports
+_src_dir = Path(__file__).resolve().parent
+if str(_src_dir) not in sys.path:
+    sys.path.insert(0, str(_src_dir))
+
 from Fetchers import run_extraction as fetch_artifacts, separate_by_component_type, extract_latest_artifacts
 
 import config
