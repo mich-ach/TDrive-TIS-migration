@@ -20,6 +20,12 @@ Requirements:
 import logging
 import os
 import sys
+from pathlib import Path
+
+# Ensure the module directory is in the path for imports
+_module_dir = Path(__file__).resolve().parent
+if str(_module_dir) not in sys.path:
+    sys.path.insert(0, str(_module_dir))
 
 from Artifacts import Artifact545, Artifact5411, INPUT_DIR, OUTPUT_DIR, LOG_LEVEL
 from Check import Check
