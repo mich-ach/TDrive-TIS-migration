@@ -17,17 +17,22 @@ A toolkit for extracting, validating, and mapping artifacts from TIS (Test Infor
 
 ## How to run
 
-Use available .bat files to create the Anaconda Environment to use the scripts. Run these files from cmd in the tool directory. Youll have the activated conda environment form which you can run python scripts with
+Use available .bat files to create the Anaconda Environment to use the scripts. Run these files from cmd in the tool directory. You'll have the activated conda environment from which you can run python scripts.
 
-    (.../TIS_Artifact_Lib)
-    createEnvironment.bat
-    activateEnvironment.bat
+```bash
+# Setup environment (one-time)
+createEnvironment.bat
+activateEnvironment.bat
 
-    cd TIS_Artifact_Fetcher/src
-    python __main__.py
-    python artifact_viewer_gui.py
+# Run tools using -m flag (from project root directory)
+python -m TIS_Artifact_Fetcher.src           # Run TIS extraction
+python -m TIS_Artifact_Fetcher.src --gui     # Open artifact viewer GUI only
+python -m TDrive_Artifact_Fetcher            # Run TDrive extraction
+python -m vVeh_LCO_Mapping.src               # Run mapping workflow
+python -m Upload                             # Run upload workflow
+```
 
-The input files for each tool have to be put in a "input" dir. So create (.../TDrive_Artifact_Fetcher/input ; TIS_Artifact_Fetcher/input) and so on where the input files are located. The tools then create an output dir containing each run with metadata.
+The input files for each tool have to be put in an "input" dir. So create (.../TDrive_Artifact_Fetcher/input ; TIS_Artifact_Fetcher/input) and so on where the input files are located. The tools then create an output dir containing each run with metadata.
 
 ## Tools Overview
 
